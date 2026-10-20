@@ -19,7 +19,7 @@ os.environ["REVOMATE_SOUND_PREFS"] = TMP      # a folder of its own: never the p
 import revomate_app as a            # noqa: E402
 import revomate_sound as rsnd       # noqa: E402
 sys.path.insert(0, os.path.join(ROOT, "tests"))
-from test_pro_page import run_page, CHROME   # noqa: E402
+from test_pages import run_page, CHROME   # noqa: E402
 
 
 @unittest.skipUnless(rsnd.sounds(), "no macOS system sounds here")
