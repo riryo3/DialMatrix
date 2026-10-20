@@ -39,6 +39,9 @@ Bit Trade One の「Rev-O-mate」（ダイヤル付きの11ボタンのキーパ
 このオープンソースは、Assembly Desk License（MIT ライセンスをもとにしたもの）で公開されていて、改変・再配布・商用利用が許されています。条件は、著作権表示とライセンス全文を載せることです。全文は `licenses/` と、アプリの中の「ライセンス表示」にあります。
 公式のアプリの実行ファイルを解析（リバースエンジニアリング）したものではありません。
 
+## 作り方
+開発には、AI（Claude と Gemini）の助けを借りています。動作の確認（実機での読み込み・LED・バックアップなど）と、公開の判断は、作者が行っています。
+
 ## ライセンス
 - DialMatrix のコード: [MIT License](LICENSE)
 - 使っているもの（Bit Trade One の Assembly Desk License、pywebview など）: [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md)
@@ -47,6 +50,6 @@ Bit Trade One の「Rev-O-mate」（ダイヤル付きの11ボタンのキーパ
 
 ## English (short)
 **DialMatrix** is an **unofficial** Mac tool for configuring Bit Trade One's *Rev-O-mate* dial keypad: read the device's settings, edit buttons / dial actions / LED colour, and write them back (with an automatic full backup first).
-Macros (several chained actions) cannot be created or edited; a button that holds one is shown as "device macro" and is overwritten if you set it again. Not affiliated with Bit Trade One. "Rev-O-mate" is a trademark of Bit Trade One. Use at your own risk.
+Macros (several chained actions) cannot be created or edited; a button that holds one is shown as "device macro" and is overwritten if you set it again. Built with the help of AI assistants (Claude and Gemini); the author checks it on a real device and decides what is released. Not affiliated with Bit Trade One. "Rev-O-mate" is a trademark of Bit Trade One. Use at your own risk.
 The device protocol was learned from Bit Trade One's public source ([BFROM11BK_Rev-O-mate](https://github.com/bit-trade-one/BFROM11BK_Rev-O-mate), Assembly Desk License, MIT-based); no binary was reverse-engineered.
 The app is not signed or notarized yet: on first launch, right-click → Open. Code: MIT (see `LICENSE`); third-party notices: `THIRD_PARTY_NOTICES.md`.
