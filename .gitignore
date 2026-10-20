@@ -1,0 +1,19 @@
+# build tools and work folders
+build_app/.venv/
+build_app/_work_*/
+build_app/_spec_*/
+build_app/_ed_*/
+build_app/dist/
+build_app/*.iconset/
+dist/
+__pycache__/
+*.pyc
+.DS_Store
+# device backups and exported files (big, personal)
+*.bin
+*.mbf
+書き出し/
+# the vendor's installer
+download/
+build_app/build/
+build_app/*.spec
