@@ -15,6 +15,10 @@ Bit Trade One の「Rev-O-mate」（ダイヤル付きの11ボタンのキーパ
 - 設定を `.bin` で保存・読み込みする
 - 本体の向き（ケーブル奥／手前）の表示切り替え
 
+## できないこと
+- **マクロ（複数の動作をつなぐ設定）の作成・編集には、対応していません。** ボタンに設定できるのは、1つの動作（キー入力、マウス操作、メディアキー）です。
+- 本体にマクロが入っているボタンは、画面では「本体のマクロ」と表示されます。**そのボタンを選び直して設定すると、マクロは上書きされます。** 公式アプリでマクロを作っている場合は、書き込む前の変更の一覧を、よく確認してください（バックアップは、自動で取られます）。
+
 ## インストール
 1. [Releases](../../releases) から、`DialMatrix.app` の zip をダウンロードして、解凍する。
 2. `DialMatrix.app` を、アプリケーションフォルダなど、好きな場所に置く。
@@ -43,6 +47,6 @@ Bit Trade One の「Rev-O-mate」（ダイヤル付きの11ボタンのキーパ
 
 ## English (short)
 **DialMatrix** is an **unofficial** Mac tool for configuring Bit Trade One's *Rev-O-mate* dial keypad: read the device's settings, edit buttons / dial actions / LED colour, and write them back (with an automatic full backup first).
-Not affiliated with Bit Trade One. "Rev-O-mate" is a trademark of Bit Trade One. Use at your own risk.
+Macros (several chained actions) cannot be created or edited; a button that holds one is shown as "device macro" and is overwritten if you set it again. Not affiliated with Bit Trade One. "Rev-O-mate" is a trademark of Bit Trade One. Use at your own risk.
 The device protocol was learned from Bit Trade One's public source ([BFROM11BK_Rev-O-mate](https://github.com/bit-trade-one/BFROM11BK_Rev-O-mate), Assembly Desk License, MIT-based); no binary was reverse-engineered.
 The app is not signed or notarized yet: on first launch, right-click → Open. Code: MIT (see `LICENSE`); third-party notices: `THIRD_PARTY_NOTICES.md`.

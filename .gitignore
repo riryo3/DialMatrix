@@ -17,3 +17,6 @@ __pycache__/
 download/
 build_app/build/
 build_app/*.spec
+
+# distribution files (made by hand, put on the GitHub Releases page)
+release/
