@@ -8,13 +8,15 @@ import re
 import threading
 import time
 
+from revomate_device import DEVICE_LOCK, device_busy, register_close
+
 VID, PID = 0x22EA, 0x004B
 LED_PREVIEW_CMD, GET_MODE_CMD, CMD_READ = 0x64, 0x31, 0x11
 LED_GAMMA, LED_MAX_DUTY = 2.0, 90
 OPEN_RETRY = 3.0           # seconds to wait before trying to open the device again after a failure
 RELEASE_AFTER = 4.0        # let go of the device this long after the last use
 
-_lock = threading.RLock()
+_lock = DEVICE_LOCK
 _dev = None
 _last_use = 0.0
 _last_fail = 0.0
@@ -36,13 +38,18 @@ def duties(rgb, level=1.0):
 def pause(seconds=120.0):
     """Stop using the device for a while (the app is about to read / write it itself)."""
     global _paused_until
-    _paused_until = time.time() + seconds
-    close()
+    with _lock:
+        _paused_until = time.time() + seconds
+        close()
 
 
 def resume():
     global _paused_until
-    _paused_until = 0.0
+    if device_busy():
+        return
+    with _lock:
+        if not device_busy():
+            _paused_until = 0.0
 
 
 def _xfer(cmd, payload=()):
@@ -70,6 +77,8 @@ def _read_level():
 
 def _open():
     global _dev, _last_fail, _base_level
+    if device_busy():
+        return False
     if _dev is not None:
         return True
     if time.time() < _paused_until or time.time() - _last_fail < OPEN_RETRY:
@@ -112,7 +121,7 @@ def show(duty, hold_ms):
     """Light the LED with `duty` (R, G, B in 0..90) for `hold_ms`; the device then goes back to its own colour."""
     global _last_use, _timer
     with _lock:
-        if time.time() < _paused_until or not _open():
+        if device_busy() or time.time() < _paused_until or not _open():
             return False
         try:
             ticks = max(1, min(0xFFFF, int(hold_ms * 10)))          # the device counts in 100 microseconds
@@ -135,3 +144,6 @@ def preview(color_hex, ms):
     """Light the LED once with a colour chosen on the settings screen (so it can be judged on the device)."""
     resume()                                   # the person is looking at the settings now: the LED may be used
     return show(duties(hex_rgb(color_hex), 1.0), max(60, min(3000, int(ms))))
+
+
+register_close(close)

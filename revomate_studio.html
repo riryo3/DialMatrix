@@ -1760,13 +1760,13 @@
       <button class="btn" onclick="closeDryRunModal()">閉じる</button>
     </div>
     <p style="font-size:12.5px; color:var(--muted);">
-      実機に書き込む前に、変更される箇所とバックアップ手順を確認してください。<br>
-      ※安全のため、書き込み実行時には自動で <code>revomate_sector*_backup_*.bin</code> を保存し、ベリファイ（照合）を行います。
+      実機に書き込む前に、バックエンドが確認した変更箇所を表示します。<br>
+      ※バックアップや書き込み結果は実行後に表示します。自動ロールバックは保証されません。
     </p>
     <pre class="code-box" id="dryRunDiffText"></pre>
     <div style="display:flex; justify-content:flex-end; gap:10px;">
       <button class="btn" onclick="exportBinFile()">💾 まずは .bin ファイルとして保存</button>
-      <button class="btn danger" onclick="confirmWriteToDevice()">🔥 バックアップを取って実機に書き込む</button>
+      <button class="btn danger" id="dryRunConfirmButton" onclick="confirmWriteToDevice()" disabled>🔥 バックアップを取って実機に書き込む</button>
     </div>
   </div>
 </div>
@@ -4963,35 +4963,45 @@ function setConnStatus(online, text) {
 }
 
 // --- Dry-Run & Safe Flash Write ---
+let dryRunRequestId = 0;
+let dryRunPlan = null;
 async function openDryRunModal() {
+  const requestId = ++dryRunRequestId;
+  dryRunPlan = null;
   const m = document.getElementById("dryRunModal");
+  const confirmButton = document.getElementById("dryRunConfirmButton");
+  confirmButton.disabled = true;
   m.classList.remove("hidden");
-  const lines = [];
-  lines.push("=== 変更プレビュー (ドライラン) ===");
-  lines.push("※ボタンは、メディア操作・キー入力・マウス操作・本体機能切替が本体へ書き込めます（「未設定」も書き込めます）。本体機能切替（モード切替・ダイヤル切替）のボタンを、キー入力などに変えると、その切替は使えなくなります。");
-  configState.modes.forEach((modeObj, mIdx) => {
-    lines.push(`\n[モード ${mIdx + 1}: ${modeObj.name}]`);
-    lines.push(`  モード待機LED (何も触っていない時): ${modeObj.baseLed || (mIdx === 0 ? "#ff0046" : (mIdx === 1 ? "#00ff00" : "#0000ff"))}`);
-    modeObj.dialFuncs.forEach((df, fIdx) => {
-      lines.push(`  ダイヤル ${fIdx + 1}: 右回転=${describeDialAction(df.cw)} | 左回転=${describeDialAction(df.ccw)} | 感度(右/左)=${df.sensCw ?? df.sens ?? 50}/${df.sensCcw ?? df.sens ?? 50} | LED=${df.led}`);
-    });
-    const holdIdxDry = getHoldDialIndex(modeObj);
-    lines.push(`  押し込み回し (11を押している間): ${holdIdxDry >= 0 ? "ダイヤル " + (holdIdxDry + 1) : "使わない"}`);
-    modeObj.switches.forEach(swObj => {
-      const label = swObj.sw === 11 ? "11（ダイヤルの押し込み）" : String(swObj.sw);
-      const willWrite = swObj.scriptDirty && (swObj.role === "media" || swObj.role === "key" || swObj.role === "mouse" || swObj.role === "none") ? "   ← 本体のボタンの動作を書き換えます" : "";
-      const holdMark = (swObj.role === "media" || swObj.role === "key" || swObj.role === "mouse") && swObj.hold ? "（押している間だけ）" : "";
-      lines.push(`  ${label.padEnd(10, " ")} : ${describeSw(swObj)}${holdMark}${willWrite}`);
-    });
-  });
-  document.getElementById("dryRunDiffText").textContent = lines.join("\n");
+  const output = document.getElementById("dryRunDiffText");
+  output.textContent = "変更内容を実機から確認しています…";
+  const cfg = buildWriteConfig();
+  const source = JSON.parse(JSON.stringify(configState));
+  try {
+    const res = await fetch("/api/write", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ configState: cfg, dry_run: true }) });
+    const out = await res.json();
+    if (requestId !== dryRunRequestId || m.classList.contains("hidden")) return;
+    if (!res.ok || !out.ok || out.dry_run !== true || !out.plan_token) throw new Error(out.error || "プレビューを確認できませんでした");
+    const lines = ["=== 実機の変更プレビュー ===", ...(out.changes || []).map(x => "変更: " + x)];
+    if (!(out.changes || []).length) lines.push("実機へ書き込む差分はありません。");
+    if ((out.sectors || []).length) lines.push("", "予定セクター: " + out.sectors.join(", "));
+    if ((out.skipped || []).length) lines.push("", "=== スキップ（書き込み対象外） ===", ...out.skipped.map(x => `モード${Number(x.mode)+1}${x.sw == null ? "" : ` / SW${x.sw}`} ${x.label || ""}: ${x.reason || "理由不明"}`));
+    if ((out.warnings || []).length) lines.push("", "=== 警告 ===", ...out.warnings);
+    if ((out.notes || []).length) lines.push("", "=== 注記 ===", ...out.notes);
+    output.textContent = lines.join("\n");
+    dryRunPlan = { cfg, source, serialized: JSON.stringify(cfg), token: out.plan_token, eligible: out.eligible_buttons || [], hasChanges: out.has_changes !== false };
+    confirmButton.disabled = false;
+  } catch (e) {
+    if (requestId !== dryRunRequestId || m.classList.contains("hidden")) return;
+    output.textContent = "プレビューを取得できませんでした。オンライン状態を確認して再試行してください。\n" + e.message;
+    confirmButton.disabled = true;
+  }
 }
-
 function closeDryRunModal() {
+  ++dryRunRequestId;
+  dryRunPlan = null;
+  document.getElementById("dryRunConfirmButton").disabled = true;
   document.getElementById("dryRunModal").classList.add("hidden");
 }
-
-// Buttons whose push-turn hold was switched off are sent as "special function 0" so the device clears it
 function buildWriteConfig() {
   const cfg = JSON.parse(JSON.stringify(configState));
   cfg.modes.forEach(m => (m.switches || []).forEach(sw => {
@@ -4999,38 +5009,66 @@ function buildWriteConfig() {
   }));
   return cfg;
 }
-
 async function confirmWriteToDevice() {
-  if (!confirm("本当に実機のフラッシュへ書き込みますか？\n（自動でバックアップ .bin を作成してから書き込み・ベリファイを行います）")) {
+  const plan = dryRunPlan;
+  if (!plan || JSON.stringify(buildWriteConfig()) !== plan.serialized) {
+    document.getElementById("dryRunConfirmButton").disabled = true;
+    alert("設定がプレビュー後に変更されています。変更内容を再確認してください。");
     return;
   }
+  if (!confirm("プレビューした変更を実機へ書き込みますか？")) return;
   await askDoneSoundOnce();
+  if (dryRunPlan !== plan || JSON.stringify(buildWriteConfig()) !== plan.serialized) {
+    document.getElementById("dryRunConfirmButton").disabled = true;
+    dryRunPlan = null;
+    alert("設定がプレビュー後に変更されています。変更内容を再確認してください。");
+    return;
+  }
+  // Consume token before request: never submit twice or retry an ambiguous request.
+  dryRunPlan = null;
+  document.getElementById("dryRunConfirmButton").disabled = true;
+  if (!plan.hasChanges) {
+    alert("差分がないため、書き込み・ベリファイは行いません。USBの抜き差しも不要です。");
+    closeDryRunModal();
+    return;
+  }
   showBusy("実機へ書き込んでいます…", "USBケーブルを抜かないでください。完了するまで操作できません");
   try {
-    const res = await fetch("/api/write", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ configState: buildWriteConfig() })
-    });
+    const res = await fetch("/api/write", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ configState: plan.cfg, plan_token: plan.token }) });
     const out = await res.json();
     await hideBusy(600);
     if (!res.ok || !out.ok) {
       playDoneSound("fail");
-      alert("書き込みエラーまたは未接続:\n" + (out.error || "不明なエラー"));
+      const backups = (out.backups || []).join(", ") || "なし";
+      const completed = (out.completed_sectors || []).join(", ") || "なし";
+      alert(`書き込みに失敗しました: ${out.error || "不明なエラー"}\nバックアップ: ${backups}\n完了確認済みセクター: ${completed}\n失敗セクター: ${out.failed_sector ?? "不明"}\n復旧対応が必要: ${out.recovery_required ? "はい" : "いいえ"}\n自動ロールバックは行われていません。画面の編集状態は保持されています。\n\n${(out.notes || []).join("\n")}`);
       return;
     }
-    configState.modes.forEach(m => m.switches.forEach(sw => { delete sw.scriptDirty; }));
+    const appliedButtons = out.applied_buttons || [];
+    for (const item of appliedButtons) {
+      const mode = configState.modes[item.mode];
+      const submittedMode = plan.cfg.modes[item.mode];
+      if (!mode || !submittedMode) continue;
+      const current = mode.switches.find(sw => Number(sw.sw) === Number(item.sw));
+      const submitted = (submittedMode.switches || []).find(sw => Number(sw.sw) === Number(item.sw));
+      if (!current || !submitted || JSON.stringify(buildWriteConfig().modes[item.mode].switches.find(sw => Number(sw.sw) === Number(item.sw))) !== JSON.stringify(submitted)) continue;
+      const original = (plan.source.modes[item.mode].switches || []).find(sw => Number(sw.sw) === Number(item.sw));
+      if (original && JSON.stringify(current) === JSON.stringify(original)) { delete current.scriptDirty; delete current.releaseHold; }
+    }
     saveStateToStorage();
     playDoneSound("ok");
-    alert("書き込み＆ベリファイ完了！\nバックアップ: " + out.backups.join(", ") + "\n\n変更:\n" + ((out.changes || []).join("\n") || "(なし)") + "\n\n" + (out.notes || []).join("\n") + "\n\n" + (out.applied ? "本体にも、そのまま反映しました（USBを挿し直さなくても使えます）。\nもし、ボタンの動作が変わっていなければ、USBケーブルを一度抜き差ししてください。" : "USBケーブルを一度抜き差しすると反映されます。"));
+    const skipped = out.skipped || [];
+    const appliedCount = appliedButtons.filter(item => item.status !== "already_current").length;
+    const matchedCount = appliedButtons.length - appliedCount;
+    const status = out.applied ? "実行時に本体へ反映されました。" : "フラッシュへの書き込み・ベリファイは完了しました（実行時の即時反映は未確認です）。USBを抜き差しして反映してください。";
+    alert(`書き込み＆ベリファイ完了。適用ボタン: ${appliedCount}件 / すでに本体と一致: ${matchedCount}件 / スキップ: ${skipped.length}件\nバックアップ: ${(out.backups || []).join(", ") || "なし"}\n\n変更:\n${(out.changes || []).join("\n") || "(なし)"}\n注記:\n${(out.notes || []).join("\n")}\n${(out.warnings || []).join("\n")}\n${skipped.map(x => `スキップ: モード${Number(x.mode)+1}${x.sw == null ? "" : ` SW${x.sw}`} ${x.label || ""}: ${x.reason || ""}`).join("\n")}\n\n${status}`);
     closeDryRunModal();
   } catch (e) {
     await hideBusy();
     playDoneSound("fail");
-    alert("ローカルサーバー経由での書き込みに失敗しました: " + e.message);
+    alert("ローカルサーバー経由での書き込みに失敗しました: " + e.message + "\n結果が不明な場合は再送せず、実機を確認して新しいプレビューを取得してください。");
   }
 }
-
 const STORAGE_KEY_ZOOM = "revomate_studio_zoom_scale";
 
 // "自動": the page scales so that all of it fits the window

@@ -63,12 +63,16 @@ class DeviceFunctions(unittest.TestCase):
 class Http(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
+        cls.port = a.PORT
+        a.PORT = 19400                  # the handler's host check uses the app's port; other test modules may have changed it
         cls.srv = http.server.ThreadingHTTPServer(("127.0.0.1", 19400), a.StudioHandler)
         threading.Thread(target=cls.srv.serve_forever, daemon=True).start()
 
     @classmethod
     def tearDownClass(cls):
         cls.srv.shutdown()
+        cls.srv.server_close()
+        a.PORT = cls.port
 
     def post(self, path, body, origin="http://127.0.0.1:19400"):
         req = urllib.request.Request("http://127.0.0.1:19400" + path, data=json.dumps(body).encode(),

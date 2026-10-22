@@ -1,5 +1,18 @@
 # Tests
 
+## 追加した安全性テスト（実機・アプリ起動なし）
+
+プロジェクトのルートで、システムPythonとNode.jsを使います。HIDは明示的に偽物へ差し替え、アプリのmainやHTTPサーバーは起動しません。ビルド済みアプリ・同梱依存環境も使用しません。
+
+```sh
+PYTHONDONTWRITEBYTECODE=1 python3 -m unittest tests.test_write_safety tests.test_device_lock tests.test_request_serialization -v
+node --test tests/test_write_ui.js
+```
+
+詳細は `../TEST_RESULTS.md` を参照してください。下記は従来のmacOS向けテストです。全件discoverにはアプリ起動を伴うテストも含まれるため、本修正作業では全件実行していません。
+
+## 従来のテスト
+
 Run all of them with the app's Python (it has the Mac libraries):
 
     build_app/.venv/bin/python -m unittest discover -s tests -v

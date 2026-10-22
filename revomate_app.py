@@ -10,6 +10,11 @@ Usage:
 """
 import base64
 import glob
+import hashlib
+import hmac
+import secrets
+import tempfile
+from functools import wraps
 import http.server
 import json
 import os
@@ -29,9 +34,13 @@ except ImportError:
     write_sector = None
 
 import revomate_scripts
+from revomate_device import device_operation, serialized_device_operation
 
 VID, PID = 0x22EA, 0x004B
 SECTOR_SIZE = 0x10000
+FLASH_SECTORS = 32
+_PLAN_KEY = secrets.token_bytes(32)
+_PLAN_TTL = 10 * 60
 DIAL_BASE, DIAL_MODE, DIAL_FUNC = 0x100, 0x60, 0x18
 MODE_BASE, MODE_SIZE = 0x10, 0x20
 SCRIPT_INFO = 0x10000
@@ -155,8 +164,11 @@ def try_open_vendor():
 
 
 def latest_sector0_backup():
-    files = sorted(glob.glob(os.path.join(DATA_DIR, "revomate_sector0_backup_*.bin")))
-    return files[-1] if files else None
+    files = glob.glob(os.path.join(DATA_DIR, "revomate_sector0_backup_*.bin"))
+    for pattern in ("revomate_before_write_*.bin", "revomate_full_backup_*.bin"):
+        files.extend(glob.glob(os.path.join(DATA_DIR, pattern)))
+    files = [path for path in files if os.path.getsize(path) in (SECTOR_SIZE, SECTOR_SIZE * FLASH_SECTORS)]
+    return max(files, key=lambda path: os.stat(path).st_mtime_ns) if files else None
 
 
 def build_script_bytecode(sw_obj, target_size):
@@ -335,7 +347,7 @@ def apply_changes(sec0, cfg, ready=None):
             a = DIAL_BASE + DIAL_MODE * m_idx + DIAL_FUNC * f_idx
             led_apply(new, a + 0x10, df.get("led"), f"モード{m_idx + 1} ダイヤル{f_idx + 1}", changes)
 
-    notes = ["感度は、この版では書き込みません（本体の値はそのまま）。ボタンのメディア操作・キー入力と、LED の色は、画面で変えたものだけ書き込みます。"]
+    notes = ["回転スピードは、対応する動作で本体の値が1〜100のときだけ変更します。共有スクリプトや未対応の動作は変更しません。"]
     return new, changes, notes
 
 
@@ -530,6 +542,7 @@ def plan_script_rewrites(read, sec0, cfg):
             role = sw.get("role")
             label = button_label(m_idx, s_idx)
             if role == "special":
+                ready.add((m_idx, s_idx))
                 continue  # handled as a special function in apply_changes()
             if role == "none":
                 ready.add((m_idx, s_idx))   # cleared in apply_changes(): the button's script number and special function become 0
@@ -601,6 +614,18 @@ def _led_module():
     return led
 
 
+def _serialize_device_request(method):
+    @wraps(method)
+    def wrapped(self, *args, **kwargs):
+        paths = {"/api/state", "/api/write", "/api/led-preview"}
+        # LED commands take the shared lock themselves; do not mark them busy.
+        if self.path in paths and self.path not in {"/api/led-preview", "/api/led-demo"}:
+            with device_operation():
+                return method(self, *args, **kwargs)
+        return method(self, *args, **kwargs)
+    return wrapped
+
+
 class StudioHandler(http.server.SimpleHTTPRequestHandler):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, directory=HERE, **kwargs)
@@ -616,6 +641,15 @@ class StudioHandler(http.server.SimpleHTTPRequestHandler):
         self.end_headers()
         self.wfile.write(raw)
 
+    def _read_json_body(self, length):
+        """The request's JSON object; a malformed or non-object body is read as empty."""
+        try:
+            body = json.loads(self.rfile.read(length).decode("utf-8")) if length else {}
+        except ValueError:
+            return {}
+        return body if isinstance(body, dict) else {}
+
+    @_serialize_device_request
     def do_GET(self):
         if not self._local_request_ok():
             return self._send_json({"ok": False, "error": "forbidden"}, 403)
@@ -691,6 +725,7 @@ class StudioHandler(http.server.SimpleHTTPRequestHandler):
                 return False
         return True
 
+    @_serialize_device_request
     def do_POST(self):
         if not self._local_request_ok(post=True):
             return self._send_json({"ok": False, "error": "forbidden"}, 403)
@@ -699,7 +734,12 @@ class StudioHandler(http.server.SimpleHTTPRequestHandler):
             length = int(self.headers.get("Content-Length", "0"))
             if length > 12 * 1024 * 1024:
                 return self._send_json({"ok": False, "error": "too large"}, 413)
-            body = json.loads(self.rfile.read(length).decode("utf-8"))
+            try:
+                body = json.loads(self.rfile.read(length).decode("utf-8"))
+            except ValueError:
+                return self._send_json({"ok": False, "error": "bad request"}, 400)
+            if not isinstance(body, dict):
+                return self._send_json({"ok": False, "error": "bad request"}, 400)
             name = os.path.basename(str(body.get("name", "export")))
             if os.path.splitext(name)[1].lower() not in (".json", ".bin"):
                 return self._send_json({"ok": False, "error": "bad file type"}, 400)
@@ -729,7 +769,7 @@ class StudioHandler(http.server.SimpleHTTPRequestHandler):
             import revomate_sound
             length = int(self.headers.get("Content-Length", "0"))
             try:
-                body = json.loads(self.rfile.read(length).decode("utf-8")) if length else {}
+                body = self._read_json_body(length)
             except ValueError:
                 return self._send_json({"ok": False, "error": "bad request"}, 400)
             if self.path == "/api/sound-play":
@@ -737,7 +777,7 @@ class StudioHandler(http.server.SimpleHTTPRequestHandler):
             return self._send_json({"ok": True, "prefs": revomate_sound.save(body, EDITION)})
         if self.path == "/api/led-preview":
             length = int(self.headers.get("Content-Length", "0"))
-            body = json.loads(self.rfile.read(length).decode("utf-8")) if length else {}
+            body = self._read_json_body(length)
             color = str(body.get("color", ""))
             if not re.fullmatch(r"#[0-9a-fA-F]{6}", color):
                 return self._send_json({"ok": False, "error": "bad colour"}, 400)
@@ -754,83 +794,264 @@ class StudioHandler(http.server.SimpleHTTPRequestHandler):
         write_paths = ("/api/write",)
         if self.path in write_paths:
             length = int(self.headers.get("Content-Length", "0"))
-            body = json.loads(self.rfile.read(length).decode("utf-8")) if length else {}
-            try:
-                led_mod = _led_module()
-                led_mod.pause(300)          # the LED code keeps its hands off the device while the app reads / writes it
-            except Exception:
-                led_mod = None
+            body = self._read_json_body(length)
+            # The request-level transaction owns the device until close, with no
+            # timeout that could expire during a long backup or be reset by preview.
             dev = try_open_vendor()
             if dev is None:
-                if led_mod:
-                    led_mod.resume()
                 return self._send_json({
                     "ok": False,
                     "error": "Rev-O-mate (vendor interface 0xFF00) が見つからないか、権限がありません。",
                 }, 400)
             try:
                 if self.path == "/api/write":
-                    out = write_config(dev, body.get("configState", {}), dry_run=bool(body.get("dry_run")))
+                    out = write_config(dev, body.get("configState", {}), dry_run=bool(body.get("dry_run")),
+                                       plan_token=body.get("plan_token"))
                 dev.close()
-                if led_mod:
-                    led_mod.resume()
                 return self._send_json(out)
             except Exception as e:
                 try:
                     dev.close()
                 except Exception:
                     pass
-                if led_mod:
-                    led_mod.resume()
-                return self._send_json({"ok": False, "error": str(e)}, 500)
+                return self._send_json(getattr(e, "result", {"ok": False, "error": str(e)}), 500)
 
         self._send_json({"ok": False, "error": "Unknown endpoint"}, 404)
 
 
 
-def write_config(dev, cfg, dry_run=False):
-    """Apply the page's settings (`cfg`) to the device: script sectors, then sector 0, then the live update.
-    Every sector is backed up first. With dry_run, nothing is written: the returned lists show what would change."""
-    sec0 = bytearray(read_range(dev, 0, SECTOR_SIZE))
-    reader = lambda addr, n: read_range(dev, addr, n)
+class WriteFailure(IOError):
+    """A flash transaction stopped; report recovery data without claiming edits completed."""
+    def __init__(self, error, backups, completed, failed, planned):
+        super().__init__(str(error))
+        self.result = {
+            "ok": False, "error": str(error), "backups": backups,
+            "completed_sectors": completed, "failed_sector": failed,
+            "recovery_required": True, "applied_buttons": [], "changes": [],
+            "planned_changes": planned,
+            "notes": ["書き込みを中断しました。設定が一部だけ変更された可能性があります。"
+                      "自動ロールバックは行いません。全体バックアップを保管し、SAFETY_FIXES.md の復旧手順を参照してください。"],
+        }
+
+
+def _plan_fingerprint(cfg, reads, result, sectors):
+    digest = hashlib.sha256()
+    digest.update(json.dumps(cfg, sort_keys=True, ensure_ascii=False, separators=(",", ":")).encode())
+    for (addr, n), data in sorted(reads.items()):
+        digest.update(f"{addr}:{n}:".encode())
+        digest.update(data)
+    digest.update(json.dumps(result, sort_keys=True, ensure_ascii=False, separators=(",", ":")).encode())
+    for sector, data in sorted(sectors.items()):
+        digest.update(str(sector).encode())
+        digest.update(data)
+    return digest.hexdigest()
+
+
+def _plan_token(fingerprint, expires=None):
+    expires = int(time.time()) + _PLAN_TTL if expires is None else expires
+    signature = hmac.new(_PLAN_KEY, f"{expires}:{fingerprint}".encode(), hashlib.sha256).hexdigest()
+    return f"{expires}.{signature}"
+
+
+def _validate_plan_token(token, fingerprint):
+    try:
+        expires = int(token.split(".", 1)[0])
+        valid = int(time.time()) <= expires <= int(time.time()) + _PLAN_TTL
+        valid = valid and hmac.compare_digest(token, _plan_token(fingerprint, expires))
+    except (AttributeError, TypeError, ValueError):
+        valid = False
+    if not valid:
+        raise ValueError("実機または編集内容が変更されたか、確認の有効期限が切れました。変更確認（ドライラン）をやり直してください。")
+
+
+def _button_outcomes(sec0, new0, cfg, ready, script_notes, reader, wanted):
+    eligible, skipped, warnings = [], [], []
+    records = None
+    for mi, mode in enumerate(cfg.get("modes", [])[:3]):
+        for si, sw in enumerate(mode.get("switches", [])[:11]):
+            mb = MODE_BASE + MODE_SIZE * mi
+            special_changed = sw.get("role") == "special" and new0[mb + 11 + si] != sec0[mb + 11 + si]
+            if not (sw.get("scriptDirty") or sw.get("releaseHold") or special_changed):
+                continue
+            item = {"mode": mi, "sw": si + 1, "label": button_label(mi, si)}
+            if (mi, si) not in ready and sw.get("role") != "special":
+                reason = next((n for n in script_notes if n.startswith(item["label"] + ":")), "未対応のため変更しません。")
+                skipped.append(dict(item, reason=reason))
+                continue
+            changed = (new0[mb + si] != sec0[mb + si] or new0[mb + 11 + si] != sec0[mb + 11 + si]
+                       or any(w["label"] == item["label"] for w in wanted))
+            eligible.append(dict(item, status="planned" if changed else "already_current"))
+            n = sec0[mb + si]
+            if n in (0, 0xFF):
+                continue
+            if records is None:
+                records = revomate_scripts.read_records(reader(SCRIPT_INFO, SECTOR_SIZE))
+            rec = records.get(n)
+            if not rec:
+                continue
+            old = reader(rec["addr"], rec["size"])
+            if decode_button_script(old, rec.get("mode", 0)).get("role") != "macro":
+                continue
+            if any(w["script_no"] == n for w in wanted):
+                warnings.append(f"{item['label']}: 本体のマクロ（No.{n}）を上書きします。元のマクロは全体バックアップに保存されます。")
+            elif sw.get("role") in ("none", "special") and sec0[mb + 11 + si] in (0, 0xFF):
+                warnings.append(f"{item['label']}: 本体のマクロ（No.{n}）の割り当てを解除・変更します（マクロ本体は残します）。")
+    return eligible, skipped, warnings
+
+
+def _skipped_settings(sec0, cfg):
+    skipped = []
+    for mi, mode in enumerate(cfg.get("modes", [])[:3]):
+        mb = MODE_BASE + MODE_SIZE * mi
+        for fi, df in enumerate(mode.get("dialFuncs", [])[:4]):
+            a = DIAL_BASE + DIAL_MODE * mi + DIAL_FUNC * fi
+            for off, side in ((0, "cw"), (8, "ccw")):
+                cur = sec0[a + off:a + off + 8]
+                act = df.get(side, {})
+                t = int(act.get("type", 0)) & 0xFF
+                label = f"モード{mi + 1} ダイヤル{fi + 1} {'右回転' if side == 'cw' else '左回転'}"
+                if t not in SIMPLE_TYPES and t != cur[0]:
+                    skipped.append({"mode": mi, "field": f"dialFuncs.{fi}.{side}", "label": label, "reason": "未対応のダイヤル動作のため変更しません。"})
+                sens = df.get("sensCw" if side == "cw" else "sensCcw", df.get("sens"))
+                if sens is not None:
+                    try:
+                        want = int(sens)
+                    except (ValueError, TypeError):
+                        want = None
+                    supported = t in SIMPLE_TYPES
+                    have = cur[7] if cur[0] in SIMPLE_TYPES or not supported else 0x32
+                    if want != cur[7] and (want is None or not 1 <= want <= 100 or not supported or not 1 <= have <= 100):
+                        skipped.append({"mode": mi, "field": f"dialFuncs.{fi}.sens{side.title()}", "label": label + " 回転スピード", "reason": "未対応の動作または範囲外の回転スピードのため変更しません。"})
+            if "led" in df and led_duties(df["led"]) is None:
+                skipped.append({"mode": mi, "field": f"dialFuncs.{fi}.led", "label": f"モード{mi + 1} ダイヤル{fi + 1} LED", "reason": "色の形式が不正のため変更しません。"})
+        if "baseLed" in mode and led_duties(mode["baseLed"]) is None:
+            skipped.append({"mode": mi, "field": "baseLed", "label": f"モード{mi + 1} 待機LED", "reason": "色の形式が不正のため変更しません。"})
+    return skipped
+
+
+@serialized_device_operation
+def write_config(dev, cfg, dry_run=False, plan_token=None, require_plan=True):
+    """Plan from device bytes; verify the confirmed plan and full backup before any erase.
+
+    Internal initialization explicitly opts out of the page confirmation token;
+    it still uses the same serialization, full backup and verified write path.
+    """
+    reads = {}
+    def reader(addr, n):
+        if not isinstance(addr, int) or not isinstance(n, int) or n < 0 or addr < 0 or addr + n > FLASH_SECTORS * SECTOR_SIZE:
+            raise IOError("実機のフラッシュ範囲外は読み込みません。")
+        key = (addr, n)
+        if key not in reads:
+            data = bytes(read_range(dev, addr, n))
+            if len(data) != n or addr < 0 or addr + n > FLASH_SECTORS * SECTOR_SIZE:
+                raise IOError("本体からの読み込みサイズまたはアドレスが正しくありません。")
+            reads[key] = data
+        return reads[key]
+
+    sec0 = bytearray(reader(0, SECTOR_SIZE))
     wanted, script_notes, ready, assign = plan_script_rewrites(reader, sec0, cfg)
     new0, changes, notes = apply_changes(sec0, cfg, ready)
-    notes = notes + script_notes
-    for (m_i, s_i), no in assign.items():          # buttons that got a brand-new script point at it
-        new0[MODE_BASE + MODE_SIZE * m_i + s_i] = no
-    if not changes and not wanted:
-        return {"ok": True, "backups": [], "changes": [], "notes": ["変更がないため、書き込みませんでした。"] + notes}
-    script_sectors, script_lines = compute_script_writes(reader, wanted)
+    for (mi, si), no in assign.items():
+        new0[MODE_BASE + MODE_SIZE * mi + si] = no
+        changes.append(f"{button_label(mi, si)}: 新しいスクリプト {no} を割り当てます")
+    script_sectors, script_lines = compute_script_writes(reader, wanted) if wanted else ({}, [])
+    planned_sectors = {s: bytes(data) for s, data in script_sectors.items()
+                       if bytes(data) != reader(s * SECTOR_SIZE, SECTOR_SIZE)}
+    if new0 != sec0:
+        planned_sectors[0] = bytes(new0)
+    order = sorted(s for s in planned_sectors if s > 1) + [s for s in (1, 0) if s in planned_sectors]
+    eligible, skipped, warnings = _button_outcomes(sec0, new0, cfg, ready, script_notes, reader, wanted)
+    skipped += _skipped_settings(sec0, cfg)
+    out = {"ok": True, "backups": [], "changes": changes + script_lines,
+           "notes": notes + script_notes, "warnings": warnings, "skipped": skipped,
+           "eligible_buttons": eligible, "applied_buttons": [],
+           "sectors": order, "has_changes": bool(order), "applied": False}
+    if not order:
+        out["notes"].insert(0, "変更がないため、書き込みません。未適用の編集はそのまま残します。")
+    fingerprint = _plan_fingerprint(cfg, reads, out, planned_sectors)
     if dry_run:
-        return {"ok": True, "dry_run": True, "backups": [], "changes": changes + script_lines, "notes": notes}
-    ts = int(time.time())
-    backups = []
-    # 1) scripts: data sectors first, then the script table (sector 1); each sector is backed up first
-    order = sorted(k for k in script_sectors if k != 1) + ([1] if 1 in script_sectors else [])
-    for sector in order:
-        old = read_range(dev, sector * SECTOR_SIZE, SECTOR_SIZE)
-        bp = os.path.join(DATA_DIR, f"revomate_sector{sector:#x}_backup_{ts}.bin")
-        with open(bp, "wb") as f:
-            f.write(old)
-        backups.append(os.path.basename(bp))
-    for sector in order:
-        write_sector(dev, sector, bytes(script_sectors[sector]))
-    changes.extend(script_lines)
-    # 2) sector 0 (settings)
-    if new0 != sec0:
-        b0_path = os.path.join(DATA_DIR, f"revomate_sector0_backup_{ts}.bin")
-        with open(b0_path, "wb") as f:
-            f.write(sec0)
-        backups.insert(0, os.path.basename(b0_path))
-        write_sector(dev, 0, bytes(new0))
-    applied = False
-    if new0 != sec0:
+        return dict(out, dry_run=True, plan_token=_plan_token(fingerprint))
+    if require_plan:
+        _validate_plan_token(plan_token, fingerprint)
+    if not order:
+        out["applied_buttons"] = eligible  # already matches the device, not skipped
+        return out
+
+    # No erase/write may occur until this FULL backup has been durably saved and re-read.
+    backup_path = save_full_backup(dev, "before_write")
+    out["backups"] = [os.path.basename(backup_path)]
+    with open(backup_path, "rb") as f:
+        image = f.read()
+    if len(image) != FLASH_SECTORS * SECTOR_SIZE or any(image[addr:addr + n] != data for (addr, n), data in reads.items()):
+        raise IOError("バックアップと確認した実機の内容が一致しません。消去・書き込みは行っていません。")
+    completed, failed = [], None
+    try:
+        for sector in order:
+            failed = sector
+            data = planned_sectors[sector]
+            write_sector(dev, sector, data)
+            if bytes(read_range(dev, sector * SECTOR_SIZE, SECTOR_SIZE)) != data:
+                raise IOError(f"セクタ {sector} の書き込み後の照合が一致しません。")
+            completed.append(sector)
+    except Exception as error:
+        raise WriteFailure(error, out["backups"], completed, failed, out["changes"]) from error
+    out["completed_sectors"] = completed
+    out["applied_buttons"] = [dict(item, status="applied" if item["status"] == "planned" else "already_current") for item in eligible]
+    if 0 in planned_sectors:
         try:
             push_runtime_settings(dev, bytes(new0))
-            applied = True
-        except Exception as e:      # the flash write itself succeeded; only the live update failed
-            notes.append(f"本体への即時反映はできませんでした（{e}）。USB を挿し直すと反映されます。")
-    return {"ok": True, "backups": backups, "changes": changes, "notes": notes, "applied": applied}
+            out["applied"] = True
+        except Exception as e:
+            out["notes"].append(f"フラッシュへの保存・照合は完了しましたが、即時反映はできませんでした（{e}）。USB を挿し直すと反映されます。")
+    return out
+
+
+@serialized_device_operation
+def read_full_flash(dev):
+    chunks = []
+    for sector in range(FLASH_SECTORS):
+        chunk = bytes(read_range(dev, sector * SECTOR_SIZE, SECTOR_SIZE))
+        if len(chunk) != SECTOR_SIZE:
+            raise IOError(f"全体バックアップの読み込みが不完全です（セクタ {sector}）。書き込みません。")
+        chunks.append(chunk)
+    return b"".join(chunks)
+
+
+def _persist_full_backup(data, label):
+    if len(data) != FLASH_SECTORS * SECTOR_SIZE:
+        raise IOError("全体バックアップのサイズが正しくありません。")
+    if not re.fullmatch(r"[a-z_]+", label):
+        raise ValueError("bad backup label")
+    fd, temporary = tempfile.mkstemp(prefix=".revomate_backup_", suffix=".tmp", dir=DATA_DIR)
+    path = os.path.join(DATA_DIR, f"revomate_{label}_{time.time_ns()}_{secrets.token_hex(4)}.bin")
+    try:
+        with os.fdopen(fd, "wb") as f:
+            if f.write(data) != len(data):
+                raise IOError("全体バックアップの保存が不完全です。")
+            f.flush()
+            os.fsync(f.fileno())
+        with open(temporary, "rb") as f:
+            saved = f.read()
+        if len(saved) != len(data) or saved != data:
+            raise IOError("全体バックアップの保存後の照合が一致しません。書き込みません。")
+        os.replace(temporary, path)
+        directory_fd = os.open(DATA_DIR, os.O_RDONLY)
+        try:
+            os.fsync(directory_fd)
+        finally:
+            os.close(directory_fd)
+        with open(path, "rb") as f:
+            if f.read() != data:
+                raise IOError("確定した全体バックアップの照合が一致しません。")
+        return path
+    finally:
+        if os.path.exists(temporary):
+            os.unlink(temporary)
+
+
+@serialized_device_operation
+def save_full_backup(dev, label):
+    return _persist_full_backup(read_full_flash(dev), label)
 
 
 
