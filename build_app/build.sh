@@ -8,7 +8,7 @@ build_one() {
   name="DialMatrix"; page="revomate_studio.html"; icon="AppIcon.icns"; bid="com.dialmatrix.lite"
   hidden="--hidden-import revomate_ledpreview"
   mkdir -p "_ed_$ed" && echo "EDITION = \"$ed\"" > "_ed_$ed/revomate_edition.py"
-  .venv/bin/pyinstaller --noconfirm --windowed --name "$name" --icon "$PWD/$icon" --osx-bundle-identifier "$bid" \
+  .venv/bin/python -m PyInstaller --noconfirm --windowed --name "$name" --icon "$PWD/$icon" --osx-bundle-identifier "$bid" \
     --workpath "_work_$ed" --specpath "_spec_$ed" \
     --add-data "$PWD/../$page:." --add-data "$PWD/../THIRD_PARTY_NOTICES.md:." --paths .. --paths "$PWD/_ed_$ed" \
     --hidden-import webview --hidden-import ServiceManagement $hidden --hidden-import revomate_sound --hidden-import AppKit --hidden-import Quartz \
