@@ -13,7 +13,10 @@ build_one() {
     --add-data "$PWD/../$page:." --add-data "$PWD/../THIRD_PARTY_NOTICES.md:." --paths .. --paths "$PWD/_ed_$ed" \
     --hidden-import webview --hidden-import ServiceManagement $hidden --hidden-import revomate_sound --hidden-import AppKit --hidden-import Quartz \
     --hidden-import revomate_edition --hidden-import revomate_config --hidden-import revomate_scripts ../revomate_app.py
-  [ "$signed" = 1 ] || codesign --force --deep -s - "dist/$name.app" 2>&1 | tail -1
+  # tell macOS the app speaks Japanese and English, so its system panels (e.g. "save as") follow the Mac's language
+  plutil -replace CFBundleLocalizations -json '["en","ja"]' "dist/$name.app/Contents/Info.plist"
+  plutil -replace CFBundleDevelopmentRegion -string "en" "dist/$name.app/Contents/Info.plist"
+  codesign --force --deep -s - "dist/$name.app" 2>&1 | tail -1
   xattr -cr "dist/$name.app"
   rm -rf "dist/$name"      # PyInstaller also leaves a plain folder next to the .app; not needed
   touch "dist/$name.app"

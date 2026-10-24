@@ -1084,7 +1084,7 @@
       <div class="brand">
         <div class="brand-logo" id="brandLogo"></div>
         <h1>DialMatrix</h1>
-        <span class="badge" style="font-size:10px; padding:1px 6px; border-radius:4px; background:rgba(79,140,255,0.18); color:var(--accent); border:1px solid rgba(79,140,255,0.35);">v1.0.2</span>
+        <span class="badge" style="font-size:10px; padding:1px 6px; border-radius:4px; background:rgba(79,140,255,0.18); color:var(--accent); border:1px solid rgba(79,140,255,0.35);">v1.0.3</span>
       </div>
 
       <!-- Zoom Switcher Dropdown -->
@@ -1110,6 +1110,10 @@
             <option value="180">180°（手前ケーブル）</option>
           </select>
         </label>
+        <select id="langSelect" onchange="setLanguage(this.value)" title="Language / 言語" style="height:26px; padding:2px 8px; font-size:11.5px; border-radius:6px; background-color:var(--panel-alt); color:var(--text); border:1px solid var(--border);">
+          <option value="ja">日本語</option>
+          <option value="en">English</option>
+        </select>
       </div>
     </div>
 
@@ -1772,6 +1776,350 @@
 </div>
 
 <script>
+/* ===== i18n: Japanese (default) / English =====
+   The page is written in Japanese. In English mode every visible Japanese text (text nodes, tooltips, placeholders,
+   alert / confirm messages and the messages the server sends back) is looked up here: exact phrases first, then patterns,
+   then a glossary for leftovers. Japanese mode does nothing at all. */
+(function () {
+  var JA = /[぀-ヿ一-鿿]/;
+  var stored = null;
+  try { stored = localStorage.getItem("dm_lang"); } catch (_) {}
+  var lang = stored || ((navigator.language || "ja").toLowerCase().indexOf("ja") === 0 ? "ja" : "en");
+  window.DM_LANG = lang;
+  document.addEventListener("DOMContentLoaded", function () { var el = document.getElementById("langSelect"); if (el) el.value = lang; });
+  window.setLanguage = function (v) { try { localStorage.setItem("dm_lang", v); } catch (_) {} location.reload(); };
+  if (lang === "ja") { window.tr = function (s) { return s; }; return; }
+  document.documentElement.lang = "en";
+
+  var D = {
+    // --- toolbar
+    "🔍 縮尺:": "🔍 Zoom:", "自動": "Auto", "本体の向き:": "Device orientation:",
+    "本体の設置向き（文字は正立のままレイアウトが反転します）": "How the device sits (text stays upright; only the layout flips)",
+    "通常（奥ケーブル）": "Normal (cable at back)", "180°（手前ケーブル）": "180° (cable at front)",
+    "直前の操作を元に戻す (Cmd + Z)": "Undo the last change (Cmd + Z)", "元に戻す": "Undo",
+    "やり直す (Cmd + Shift + Z)": "Redo (Cmd + Shift + Z)", "やり直す": "Redo",
+    "Chrome/Edgeで実機とUSB接続します": "Connect to the device over USB (Chrome / Edge)", "WebHID接続": "WebHID connect",
+    "確認ダイアログを出してから実機の設定を読み込みます": "Reads the settings from the device (asks first)", "実機読込": "Read device",
+    ".bin または .mbf 設定ファイルを読み込む": "Open a .bin or .mbf settings file", ".binを開く": "Open .bin",
+    "編集内容を .bin 設定ファイルとして保存": "Save your edits as a .bin settings file", ".bin保存": "Save .bin",
+    "設定をファイルに保存／ファイルから読み込み": "Save settings to a file / load from a file", "保存・バックアップ": "Save / Backup",
+    "DialMatrix を終了します": "Quit DialMatrix", "終了": "Quit",
+    "実機へ書き込む前に変更差分を確認します": "Review the changes before writing to the device", "変更確認・実機へ書き込む": "Review & write to device",
+    "実機を読み込んでいます…": "Reading the device…", "完了するまで、画面や本体には触れないでください": "Please don't touch the screen or the device until it finishes",
+    // --- preview / presets
+    "本体プレビュー": "Device preview", "モード待機時の発光色": "Glow colour while the mode is idle", "ダイヤル1〜4の回転時点灯色": "Colour shown while dials 1–4 turn",
+    "再生": "Play", "左回転": "Turn left", "右回転": "Turn right", "通常回転": "Normal turn", "押し込み回し": "Push-turn",
+    "マイ・プリセット": "My presets", "プリセット保存名を入力 (例: DaVinci編集 / 配信セット)": "Preset name (e.g. DaVinci editing / Streaming)",
+    "モード1〜3のすべてをセットで丸ごと保存します": "Saves all of modes 1–3 as one set", "📦 3モード保存": "📦 Save 3 modes",
+    "いま選んでいるモード1つだけを保存します": "Saves only the mode you have selected", "＋ このモード保存": "+ Save this mode",
+    "並び順:": "Sort:", "作成・保存した順番で並べます": "Sort by the order saved", "登録順": "Saved",
+    "アルファベット・ひらがな・漢字順で並べます": "Sort alphabetically", "名前順": "Name",
+    "3モードのプリセット": "3-mode presets", "1モードのプリセット": "1-mode presets",
+    "クリックしてモード1〜3すべてに一括で読み込む": "Click to load into all of modes 1–3", "クリックして現在選択中のモードに読み込む": "Click to load into the selected mode",
+    "このプリセットを削除": "Delete this preset", "（保存された3モードプリセットはありません）": "(No 3-mode presets saved)",
+    "（保存された1モードプリセットはありません）": "(No 1-mode presets saved)", "まだ保存されたプリセットはありません": "No presets saved yet",
+    "ミュージック": "Music", "イラスト / 写真": "Illustration / Photo", "自動保存済": "Auto-saved",
+    // --- dial section
+    "ダイヤル回転": "Dial turns", "何も触っていない時のLED発光色を設定": "Set the LED colour while nothing is touched", "待機": "Idle",
+    "動作の種類": "Action type", "メディア動作": "Media action", "マウス動作": "Mouse action", "キー割り当て": "Key",
+    "キー割り当て（修飾キー単体も可）": "Key (modifier keys alone are fine)", "割り当て内容": "Assigned action",
+    "メディア操作 (音量 / 再生 / 曲送り)": "Media (volume / play / skip)", "マウス操作 (クリック / スクロール)": "Mouse (click / scroll)",
+    "キーボード入力 (ショートカット / 修飾キー)": "Keyboard (shortcut / modifier keys)", "未設定": "Not set",
+    "本体機能切替 (モード切替 / ダイヤル切替)": "Device function (switch mode / dial)", "キー押下": "Press key",
+    "動作なし（未設定）": "No action (not set)", "待機色設定中のため、回転動作はありません": "Idle colour is selected, so there is no turn action",
+    "待機色設定中のため、感度設定はありません": "Idle colour is selected, so there is no sensitivity setting",
+    "1: 信号が少ない (鈍い)": "1: fewer signals (slow)", "100: 信号がたくさん (敏感)": "100: many signals (sensitive)",
+    "50 (標準)": "50 (default)", "標準(50)に戻す": "Reset to default (50)", "(速い)": "(fast)", "(ゆっくり)": "(slow)",
+    "右回転の反応スピード:": "Turn-right response speed:", "左回転の反応スピード:": "Turn-left response speed:",
+    "色を選ぶと、本体のLEDにも一時的に表示されます（アプリ、または WebHID 接続のとき。少しして元の色に戻ります）。": "The colour you pick is also shown briefly on the device LED (in the app or over WebHID), then it returns to the saved colour.",
+    "LED発光色": "LED colour", "色を決める画面の方法": "How colours are picked", "カラーパレット": "Colour palette",
+    "HSL（色合い・鮮やかさ・明るさ）": "HSL (hue / saturation / lightness)", "RGB（赤・緑・青）": "RGB (red / green / blue)", "カラーコード（#ff8000）": "Colour code (#ff8000)",
+    "押して色を選ぶ": "Click to pick a colour", "11 を押している間に使うダイヤル": "Dial used while 11 is held down",
+    // --- button section
+    "ボタン": "Buttons", "左の本体プレビューから設定したいボタン（1〜11）を選択してください。": "Select a button (1–11) in the device preview on the left.",
+    "11 の設定（ダイヤルの押し込み）": "Button 11 settings (dial push)", "本体機能切替の種類": "Device function",
+    "モードを順番に切替": "Cycle through modes", "モード 1 へ直行": "Go to mode 1", "モード 2 へ直行": "Go to mode 2", "モード 3 へ直行": "Go to mode 3",
+    "ダイヤル 1 に切替": "Switch to dial 1", "ダイヤル 2 に切替": "Switch to dial 2", "ダイヤル 3 に切替": "Switch to dial 3", "ダイヤル 4 に切替": "Switch to dial 4",
+    "押している間だけダイヤル 1": "Dial 1 while held", "押している間だけダイヤル 2": "Dial 2 while held", "押している間だけダイヤル 3": "Dial 3 while held", "押している間だけダイヤル 4": "Dial 4 while held",
+    "ダイヤルを順番に切替": "Cycle through dials",
+    "押している間だけ効かせる（長押しで早送り・ドラッグなど。離すと止まります）": "Active only while held (e.g. hold to fast-forward or drag; stops when released)",
+    "「未設定」にして書き込むと、このボタンは何も起こさなくなります（本体のスクリプト番号を外します）。": "If you set \"Not set\" and write it, this button does nothing (its script number is removed from the device).",
+    "ボタン設定": "Button settings", "使わない": "Not used",
+    // --- overview drawer
+    "割り当て一覧": "Assignments", "閉じる ✕": "Close ✕", "閉じる": "Close", "行をクリックするとその場所の編集へジャンプします。": "Click a row to jump to its settings.",
+    "場所": "Where", "種類": "Type", "クリックで割り当て一覧を開閉": "Click to open / close the assignment list", "◀ 割り当て一覧を開く": "◀ Open assignment list",
+    "モード待機時": "Mode idle", "底面LED発光色": "Bottom LED colour", "クリックしてモード待機色を編集": "Click to edit the idle colour",
+    "クリックしてこの通常回転の編集へ移動": "Click to edit this normal turn", "クリックして押し込み回しの設定へ移動": "Click to edit the push-turn",
+    "クリックして 11 の編集へ移動": "Click to edit button 11", "ダイヤルの押し込み": "Dial push", "右回転：": "Turn right:", "左回転：": "Turn left:", "右：": "Right:", "左：": "Left:",
+    "(待機中)": "(idle)",
+    // --- backup modal
+    "自動保存": "Auto-save", "変更すると、自動でこのブラウザに保存されます（画面を閉じても残ります）。": "Your changes are saved automatically in this browser (they stay after you close the window).",
+    "ブラウザのデータを消すと失われるので、大切な設定は下のファイルにも保存してください。": "Clearing the browser's data erases them, so save important settings to a file below as well.",
+    "ファイルに保存": "Save to file", "3つのモードすべて": "All 3 modes", "LED の色を含める": "Include LED colours", "マイ・プリセットを含める": "Include My presets",
+    "ファイルから読み込み": "Load from file", "保存したファイルを読み込みます。読み込み前に内容を確認できます。": "Loads a file you saved. You can review it before it is applied.",
+    "読み込んだあとも、「元に戻す」で戻せます。": "You can still undo after loading.", "ファイルを選ぶ": "Choose a file",
+    "完了音の設定": "Completion sound", "ライセンス表示": "Licences", "試す": "Try", "終わったら、音でお知らせしますか？": "Play a sound when it finishes?",
+    "バックアップや書き込みは、時間がかかります。終わったときに、音で知らせます。この設定は、あとから「保存・バックアップ」の中の「完了音の設定」で変えられます。": "Backups and writes take a while. A sound can tell you when it is done. You can change this later under \"Save / Backup\" → \"Completion sound\".",
+    "バックアップ・書き込み・読み込みが終わったときに鳴らす音です。": "The sound played when a backup, write or read finishes.",
+    "終わったら音で知らせる": "Play a sound when finished", "成功の音": "Success sound", "失敗の音": "Failure sound", "決定": "OK", "キャンセル": "Cancel",
+    "例: #ff8000　（#f80 のような短い書き方も使えます）": "e.g. #ff8000 (short forms like #f80 also work)",
+    // --- dry-run modal
+    "⚠️ 書き込み前の変更確認（ドライラン）": "⚠️ Review before writing (dry run)",
+    "実機に書き込む前に、バックエンドが確認した変更箇所を表示します。": "Shows the changes the app checked against the device before anything is written.",
+    "※バックアップや書き込み結果は実行後に表示します。自動ロールバックは保証されません。": "* Backup and write results appear after writing. Automatic rollback is not guaranteed.",
+    "💾 まずは .bin ファイルとして保存": "💾 Save as a .bin file first", "🔥 バックアップを取って実機に書き込む": "🔥 Back up and write to the device",
+    // --- mouse / media / keys
+    "左クリック": "Left click", "右クリック": "Right click", "ホイールクリック (中クリック)": "Wheel click (middle click)", "ボタン4 (戻る)": "Button 4 (back)", "ボタン5 (進む)": "Button 5 (forward)",
+    "ダブルクリック": "Double click", "ホイールスクロール (上)": "Wheel scroll (up)", "ホイールスクロール (下)": "Wheel scroll (down)", "ホイール (上)": "Wheel (up)", "ホイール (下)": "Wheel (down)",
+    "一時停止": "Pause", "停止": "Stop", "録音": "Record", "早送り": "Fast forward", "巻戻し": "Rewind", "次の曲": "Next track", "前の曲": "Previous track", "ミュート": "Mute", "音量+": "Volume +", "音量-": "Volume −",
+    "なし (修飾キーのみ)": "None (modifier only)", "Space (スペース)": "Space", "Backspace (削除)": "Backspace", "Delete (先削除)": "Delete",
+    "→ (右矢印)": "→ (right arrow)", "← (左矢印)": "← (left arrow)", "↑ (上矢印)": "↑ (up arrow)", "↓ (下矢印)": "↓ (down arrow)",
+    "- (マイナス)": "- (minus)", "+ (= / プラス)": "+ (= / plus)", "\\ (バックスラッシュ)": "\\ (backslash)", "] (JIS む)": "] (JIS mu)", "; (セミコロン)": "; (semicolon)",
+    "' (引用符)": "' (quote)", "` (バッククォート)": "` (backtick)", "Num- (テンキー -)": "Num- (keypad -)", "Num+ (テンキー +)": "Num+ (keypad +)",
+    "テンキー+": "Num+", "テンキー-": "Num-", "削除": "Delete", "マウス操作": "Mouse", "メディア": "Media", "本体のマクロ": "Device macro",
+    "モード切替": "Switch mode", "モード1へ": "To mode 1", "モード2へ": "To mode 2", "モード3へ": "To mode 3",
+    "ダイヤル1": "Dial 1", "ダイヤル2": "Dial 2", "ダイヤル3": "Dial 3", "ダイヤル4": "Dial 4",
+    "押下中ダイヤル1": "Dial 1 (held)", "押下中ダイヤル2": "Dial 2 (held)", "押下中ダイヤル3": "Dial 3 (held)", "押下中ダイヤル4": "Dial 4 (held)", "ダイヤル順送り": "Next dial",
+    "本体のマクロ（画面では編集できない形です。選び直すと上書きされます）": "Device macro (can't be edited here; choosing a new action overwrites it)",
+    "モード 1 (ミュージック)": "Mode 1 (Music)", "モード 2 (DaVinci Resolve)": "Mode 2 (DaVinci Resolve)", "モード 3 (イラスト / 写真)": "Mode 3 (Illustration / Photo)",
+    "通常 / ダイヤル 1": "Normal / Dial 1", "(起動時)": "(startup)", "いま選んでいるモードだけ（": "Only the selected mode (", "）": ")", "モード待機時 ": "mode idle",
+    "キーを押す...": "Press a key...", "そのままキー / 離して単体": "Press a key / release for the modifier alone",
+    "使わない：11 は通常のボタンとして使えます。押し込み回しをするには、押している間に使う別のダイヤルを選びます。": "Not used: 11 works as a normal button. To use push-turn, choose the dial to use while it is held.",
+    "11 は押し込み回し専用になり、押しただけの動作（再生など）は使えません。": "11 becomes push-turn only; a plain press (e.g. play) no longer works.",
+    "この設定は、このモードのすべてのダイヤルで共通です。": "This setting is shared by all dials in this mode.",
+    // --- messages from the page
+    "プリセット名を入力してください（例: DaVinci編集、自分の3モード全部 など）": "Please enter a preset name (e.g. DaVinci editing, my full 3-mode set).",
+    "これ以上戻せません (Undo履歴がありません)": "Nothing more to undo.", "これ以上やり直せません (Redo履歴がありません)": "Nothing more to redo.",
+    "3モード一括": "all 3 modes", "1モード": "1 mode", "3モード一括プリセット": "3-mode preset", "1モードプリセット": "1-mode preset",
+    "プリセットで上書きしてもよろしいですか？": "overwrite it?", "DialMatrix を終了しますか？": "Quit DialMatrix?", "（書き込んでいない変更は、消えます）": "(Changes you haven't written will be lost.)",
+    "DialMatrix を終了しました。このタブは閉じて構いません。": "DialMatrix has quit. You can close this tab.",
+    "ライセンス表示は、アプリの中にあります（THIRD_PARTY_NOTICES.md）。": "The licence notices are inside the app (THIRD_PARTY_NOTICES.md).",
+    "このファイルは読み込めません（JSON として読めませんでした）。": "This file can't be loaded (it isn't valid JSON).", "ファイルを読み込めませんでした。": "The file could not be read.",
+    "DialMatrix の設定ファイルではないようです。": "This doesn't look like a DialMatrix settings file.",
+    "このファイルは、新しい版の Studio で保存されたものです。アプリを更新してから読み込んでください。": "This file was saved by a newer version. Please update the app before loading it.",
+    "1つのモード": "1 mode", "なし": "none", "含まれています": "included", "含まれていません（いまの色のまま）": "not included (colours stay as they are)",
+    "現在の編集内容は置き換わります。「元に戻す」で戻せます。": "Your current edits will be replaced. You can undo this.", "読み込みますか？": "Load it?",
+    "※本体へ反映するには、「変更確認・実機へ書き込む」を使います。": "* To apply this to the device, use \"Review & write to device\".",
+    "WebHIDデバイスが接続されていません": "No WebHID device is connected", "実機からのデータ読込サイズ不一致": "Size mismatch while reading from the device",
+    "実機から設定を読み込みました。": "Settings were read from the device.", "このブラウザはWebHIDに対応していません。Chrome または Edge をご利用ください。": "This browser doesn't support WebHID. Please use Chrome or Edge.",
+    "✓ 接続済": "✓ Connected", "Rev-O-mate 実機とWebHID接続されています (クリックで再確認)": "Connected to the Rev-O-mate over WebHID (click to check again)",
+    "保存をキャンセルしました": "Save cancelled", "✔ 保存しました（Finder に表示します）": "✔ Saved (shown in Finder)",
+    "⚠️ 実機から設定を読み込みますか？": "⚠️ Read the settings from the device?",
+    "読み込むと、現在画面上で編集している内容が『実機の中の設定』で上書きされます。": "What you are editing on screen will be replaced by the settings stored on the device.",
+    "（いまの編集内容を残したい場合は、キャンセルして先に「マイ・プリセット」や「.bin保存」で保存してください）": "(To keep your current edits, cancel and save them first as a preset or with \"Save .bin\".)",
+    "✔ 実機の読み込みが完了しました": "✔ Finished reading the device", "※ 実機ではなく、バックアップを表示しています": "* Showing a backup, not the device",
+    "実機を読み込むには、Chrome / Edge で「WebHID接続」を使うか、「.binを開く」をご利用ください。": "To read the device, use \"WebHID connect\" in Chrome / Edge, or use \"Open .bin\".",
+    "ローカルサーバー読込完了": "Loaded from the local server", "ローカルサーバーに接続できませんでした。「WebHID接続」または「.binを開く」をご利用ください。": "Couldn't reach the local server. Use \"WebHID connect\" or \"Open .bin\".",
+    "実機接続中 (USB Vendor HID)": "Device connected (USB Vendor HID)",
+    "変更内容を実機から確認しています…": "Checking the changes against the device…", "プレビューを確認できませんでした": "Couldn't check the preview",
+    "=== 実機の変更プレビュー ===": "=== Preview of changes to the device ===", "実機へ書き込む差分はありません。": "There is nothing to write to the device.",
+    "=== スキップ（書き込み対象外） ===": "=== Skipped (not written) ===", "=== 警告 ===": "=== Warnings ===", "=== 注記 ===": "=== Notes ===", "理由不明": "reason unknown",
+    "プレビューを取得できませんでした。オンライン状態を確認して再試行してください。": "Couldn't get the preview. Check that the device is connected and try again.",
+    "設定がプレビュー後に変更されています。変更内容を再確認してください。": "The settings changed after the preview. Please review the changes again.",
+    "プレビューした変更を実機へ書き込みますか？": "Write the previewed changes to the device?",
+    "差分がないため、書き込み・ベリファイは行いません。USBの抜き差しも不要です。": "There are no differences, so nothing is written or verified. No need to replug the USB cable.",
+    "実機へ書き込んでいます…": "Writing to the device…", "USBケーブルを抜かないでください。完了するまで操作できません": "Don't unplug the USB cable. You can't use the app until this finishes",
+    "不明なエラー": "unknown error", "不明": "unknown", "はい": "yes", "いいえ": "no", "(なし)": "(none)",
+    "自動ロールバックは行われていません。画面の編集状態は保持されています。": "No automatic rollback was done. Your edits on screen are kept.",
+    "実行時に本体へ反映されました。": "It is already active on the device.",
+    "フラッシュへの書き込み・ベリファイは完了しました（実行時の即時反映は未確認です）。USBを抜き差しして反映してください。": "Writing to flash and verifying are done (live activation is not confirmed). Unplug and replug the USB cable to apply it.",
+    "ローカルサーバー経由での書き込みに失敗しました:": "Writing through the local server failed:",
+    "結果が不明な場合は再送せず、実機を確認して新しいプレビューを取得してください。": "If the result is unclear, don't resend: check the device and get a new preview.",
+    // --- messages from the server
+    "本体の設定が空です。先に初期化/復元してください。": "The device settings are empty. Please initialise / restore first.",
+    "回転スピードは、対応する動作で本体の値が1〜100のときだけ変更します。共有スクリプトや未対応の動作は変更しません。": "Turn speed is changed only for supported actions whose device value is 1–100. Shared scripts and unsupported actions are left alone.",
+    "変更がないため、書き込みません。未適用の編集はそのまま残します。": "There are no changes, so nothing is written. Your unapplied edits are kept.",
+    "未対応のため変更しません。": "Not changed: not supported.", "未対応のダイヤル動作のため変更しません。": "Not changed: unsupported dial action.",
+    "未対応の動作または範囲外の回転スピードのため変更しません。": "Not changed: unsupported action or turn speed out of range.", "色の形式が不正のため変更しません。": "Not changed: invalid colour format.",
+    "書き込みを中断しました。設定が一部だけ変更された可能性があります。": "The write was interrupted. The settings may have been partly changed.",
+    "自動ロールバックは行いません。全体バックアップを保管し、SAFETY_FIXES.md の復旧手順を参照してください。": "No automatic rollback is done. Keep the full backup and see the recovery steps in SAFETY_FIXES.md.",
+    "実機または編集内容が変更されたか、確認の有効期限が切れました。変更確認（ドライラン）をやり直してください。": "The device or your edits changed, or the confirmation expired. Please run the review (dry run) again.",
+    "バックアップと確認した実機の内容が一致しません。消去・書き込みは行っていません。": "The backup doesn't match the device contents that were checked. Nothing was erased or written.",
+    "実機のフラッシュ範囲外は読み込みません。": "Reading outside the device flash is refused.", "本体からの読み込みサイズまたはアドレスが正しくありません。": "The size or address read from the device is wrong.",
+    "全体バックアップのサイズが正しくありません。": "The full backup has the wrong size.", "全体バックアップの保存が不完全です。": "The full backup was not saved completely.",
+    "全体バックアップの保存後の照合が一致しません。書き込みません。": "The saved full backup doesn't match. Nothing is written.", "確定した全体バックアップの照合が一致しません。": "The finished full backup doesn't match.",
+    "Rev-O-mate (vendor interface 0xFF00) が見つからないか、権限がありません。": "Rev-O-mate (vendor interface 0xFF00) was not found, or access is not allowed.",
+    "取得不可": "unavailable", "書き出し": "Exports"
+  };
+
+  var R = [];   // [regex, function(match) -> English]
+  function add(re, fn) { R.push([re, fn]); }
+  function T(s) { return window.tr(s); }
+  var side = function (c) { return c === "右" ? "right" : "left"; };
+  // dial / mode phrases
+  add(/^(押し下げ)?(右|左)回転：(.+)$/, function (m) { return (m[1] ? "Push + turn " : "Turn ") + side(m[2]) + ": " + T(m[3]); });
+  add(/^モード ?(\d)( \(.*\))?$/, function (m) { var rest = (m[2] || "").trim(); return "Mode " + m[1] + (rest ? " " + T(rest) : ""); });
+  add(/^ダイヤル ?(\d)$/, function (m) { return "Dial " + m[1]; });
+  add(/^(通常回転|底面LEDカラー|回転スピード（感度）)の設定 \((.+)\)$/, function (m) { return { "通常回転": "Normal turn", "底面LEDカラー": "Bottom LED colour", "回転スピード（感度）": "Turn speed (sensitivity)" }[m[1]] + " settings (" + T(m[2]) + ")"; });
+  add(/^押し込み回しの設定 \(モード共通\)$/, function () { return "Push-turn settings (all modes)"; });
+  add(/^(通常回転|底面LEDカラー|回転スピード（感度）)の設定 \(モード待機時\)$/, function (m) { return { "通常回転": "Normal turn", "底面LEDカラー": "Bottom LED colour", "回転スピード（感度）": "Turn speed (sensitivity)" }[m[1]] + " settings (mode idle)"; });
+  add(/^(.+) の設定$/, function (m) { return "Button " + m[1] + " settings"; });
+  add(/^クリックして (.+) の編集へ移動$/, function (m) { return "Click to edit " + m[1]; });
+  add(/^ダイヤル (\d)$/, function (m) { return "Dial " + m[1]; });
+  add(/^モード (\d)$/, function (m) { return "Mode " + m[1]; });
+  add(/^スクリプト\(No\.(\d+)\) \[固定\]$/, function (m) { return "Script (No." + m[1] + ") [fixed]"; });
+  add(/^キー \((0x[0-9A-Fa-f]+)\)$/, function (m) { return "Key (" + m[1] + ")"; });
+  add(/^マウス\((\d+)\)$/, function (m) { return "Mouse(" + m[1] + ")"; });
+  add(/^機能切替\((\d+)\)$/, function (m) { return "Function(" + m[1] + ")"; });
+  add(/^(\d+) \((速い|ゆっくり)\)$/, function (m) { return m[1] + (m[2] === "速い" ? " (fast)" : " (slow)"); });
+  add(/^(\d+) \(標準\)$/, function (m) { return m[1] + " (default)"; });
+  add(/^いま選んでいるモードだけ（(.+)）$/, function (m) { return "Only the selected mode (" + T(m[1]) + ")"; });
+  add(/^11 の設定が「押している間だけダイヤル (\d)」に変わります。$/, function (m) { return "Button 11 will become \"Dial " + m[1] + " while held\"."; });
+  add(/^11 に今入っている「(.+)」は使えなくなります（11 は押し込み回し専用になります）。$/, function (m) { return "What 11 does now (\"" + T(m[1]) + "\") will no longer work (11 becomes push-turn only)."; });
+  add(/^11 を押している間、(.*)ダイヤル (\d)(.*) の回転設定に切り替わります。$/, function (m) { return "While 11 is held, the turn settings switch to dial " + m[2] + "."; });
+  add(/^ダイヤル (\d) の設定を開く$/, function (m) { return "Open dial " + m[1] + " settings"; });
+  add(/^押し込み回しをやめます。$/, function () { return "This stops using push-turn."; });
+  add(/^11 は、本体に元から入っている動作に戻ります（書き込み後、USB を抜き差しすると反映されます）。$/, function () { return "11 goes back to the action stored on the device (after writing, replug the USB cable to apply it)."; });
+  add(/^ファイル「(.+)」を読み込みますか？$/, function (m) { return "Load the file \"" + m[1] + "\"?"; });
+  add(/^（現在画面で編集中の内容が上書きされます）$/, function () { return "(What you are editing now will be overwritten.)"; });
+  add(/^ファイル読込済: (.+)$/, function (m) { return "File loaded: " + m[1]; });
+  add(/^同名のプリセット「(.+)」\((.+)\) が既に存在します。$/, function (m) { return "A preset named \"" + m[1] + "\" (" + T(m[2]) + ") already exists."; });
+  add(/^今回保存する (.+) プリセットで上書きしてもよろしいですか？$/, function (m) { return "Overwrite it with the " + (m[1] === "3モード一括" ? "3-mode" : "1-mode") + " preset you are saving now?"; });
+  add(/^3モード全体プリセット「(.+)」を読み込みますか？$/, function (m) { return "Load the 3-mode preset \"" + m[1] + "\"?"; });
+  add(/^（モード1〜3すべてがこのプリセットの内容に切り替わります）$/, function () { return "(All of modes 1–3 will switch to this preset.)"; });
+  add(/^「(.+)」$/, function (m) { return "\"" + m[1] + "\""; });
+  add(/^(.+)「(.+)」を削除してもよろしいですか？$/, function (m) { return "Delete the " + T(m[1]) + " \"" + m[2] + "\"?"; });
+  add(/^・(.+)を読み込みます(.*)$/, function (m) { return "• Loads " + T(m[1]) + (m[2] ? " " + T(m[2]) : ""); });
+  add(/^（いまのモード (\d) が置き換わります）$/, function (m) { return "(replaces the current mode " + m[1] + ")"; });
+  add(/^・LED の色: (.+)$/, function (m) { return "• LED colours: " + T(m[1]); });
+  add(/^・マイ・プリセット: (.+?)(?:件（同じ名前のものは追加しません）)?$/, function (m) { return "• My presets: " + (/^\d+$/.test(m[1]) ? m[1] + " (existing names are not added)" : T(m[1])); });
+  add(/^読み込みました。(.*)$/, function (m) { return "Loaded." + (m[1] ? " " + T(m[1]) : ""); });
+  add(/^マイ・プリセットを (\d+) 件追加しました。$/, function (m) { return "Added " + m[1] + " preset(s) to My presets."; });
+  add(/^HID通信タイムアウト \(cmd=(0x[0-9a-f]+)\)$/, function (m) { return "HID communication timed out (cmd=" + m[1] + ")"; });
+  add(/^WebHID 実機から読込中\.\.\. (\d+%)$/, function (m) { return "Reading from the device over WebHID... " + m[1]; });
+  add(/^WebHID経由での実機読込エラー: (.+)$/, function (m) { return "Error reading the device over WebHID: " + m[1]; });
+  add(/^WebHID接続エラー: (.+)$/, function (m) { return "WebHID connection error: " + m[1]; });
+  add(/^書き込みに失敗しました: (.+)$/, function (m) { return "Writing failed: " + T(m[1]); });
+  add(/^バックアップ: (.+)$/, function (m) { return "Backup: " + T(m[1]); });
+  add(/^完了確認済みセクター: (.+)$/, function (m) { return "Sectors verified: " + T(m[1]); });
+  add(/^失敗セクター: (.+)$/, function (m) { return "Failed sector: " + T(m[1]); });
+  add(/^復旧対応が必要: (.+)$/, function (m) { return "Recovery needed: " + T(m[1]); });
+  add(/^書き込み＆ベリファイ完了。適用ボタン: (\d+)件 \/ すでに本体と一致: (\d+)件 \/ スキップ: (\d+)件$/, function (m) { return "Write and verify complete. Applied buttons: " + m[1] + " / already matched the device: " + m[2] + " / skipped: " + m[3]; });
+  add(/^変更:$/, function () { return "Changes:"; });
+  add(/^注記:$/, function () { return "Notes:"; });
+  add(/^変更: (.+)$/, function (m) { return "Change: " + T(m[1]); });
+  add(/^予定セクター: (.+)$/, function (m) { return "Sector numbers to write: " + m[1] + " (0 = settings)"; });
+  add(/^スキップ: (.+)$/, function (m) { return "Skipped: " + T(m[1]); });
+  add(/^公式: (.+)$/, function (m) { return "Official: " + m[1]; });
+  add(/^・(.+)$/, function (m) { return "• " + T(m[1]); });
+  add(/^読み込みました。$/, function () { return "Loaded."; });
+  // server: change lines
+  add(/^モード(\d)(?: ボタン(\S+))?: 起動時のダイヤル (\d) → (\d)$/, function (m) { return "Mode " + m[1] + ": startup dial " + m[3] + " → " + m[4]; });
+  add(/^モード(\d) ダイヤル(\d) (右回転|左回転)の回転スピード: (\d+) → (\d+)$/, function (m) { return "Mode " + m[1] + " dial " + m[2] + " turn " + side(m[3][0]) + " speed: " + m[4] + " → " + m[5]; });
+  add(/^モード(\d) ダイヤル(\d) (右回転|左回転): ([0-9a-f ]+) → ([0-9a-f ]+)$/, function (m) { return "Mode " + m[1] + " dial " + m[2] + " turn " + side(m[3][0]) + ": " + m[4] + " → " + m[5]; });
+  add(/^モード(\d) ボタン(\S+): スクリプト (\d+) → 未設定（0）$/, function (m) { return "Mode " + m[1] + " button " + m[2] + ": script " + m[3] + " → not set (0)"; });
+  add(/^モード(\d) ボタン(\S+): 特殊機能 (\d+) → 0（本体機能切替をやめて、ボタン本来の動作に戻します）$/, function (m) { return "Mode " + m[1] + " button " + m[2] + ": special function " + m[3] + " → 0 (stop switching device functions; the button does its own action again)"; });
+  add(/^モード(\d) ボタン(\S+): 特殊機能 (\d+) → (\d+)$/, function (m) { return "Mode " + m[1] + " button " + m[2] + ": special function " + m[3] + " → " + m[4]; });
+  add(/^モード(\d) (待機|ダイヤル(\d)) LED: ([0-9a-f ]+) → ([0-9a-f ]+)$/, function (m) { return "Mode " + m[1] + " " + (m[2] === "待機" ? "idle" : "dial " + m[3]) + " LED: " + m[4] + " → " + m[5]; });
+  add(/^モード(\d) ボタン(\S+): 新しいスクリプト (\d+) を割り当てます$/, function (m) { return "Mode " + m[1] + " button " + m[2] + ": assigns new script " + m[3]; });
+  add(/^モード(\d) ボタン(\S+): 新しいスクリプト(\d+)を作成 \((\d+)B(・押している間)?\) (.*)$/, function (m) { return "Mode " + m[1] + " button " + m[2] + ": creates new script " + m[3] + " (" + m[4] + " B" + (m[5] ? " · while held" : "") + ") " + m[6]; });
+  add(/^モード(\d) ボタン(\S+): スクリプト(\d+) \((\d+)B → (\d+)B(・押している間)?\) (.*)$/, function (m) { return "Mode " + m[1] + " button " + m[2] + ": script " + m[3] + " (" + m[4] + " B → " + m[5] + " B" + (m[6] ? " · while held" : "") + ") " + m[7]; });
+  add(/^モード(\d) ボタン(\S+): 書き込める動作ではありません。$/, function (m) { return "Mode " + m[1] + " button " + m[2] + ": this action can't be written."; });
+  add(/^モード(\d) ボタン(\S+): 書き込める動作ではありません（キーが選ばれていないなど）。$/, function (m) { return "Mode " + m[1] + " button " + m[2] + ": this action can't be written (e.g. no key chosen)."; });
+  add(/^モード(\d) ボタン(\S+): スクリプトの空き番号がないため、書き込めません。$/, function (m) { return "Mode " + m[1] + " button " + m[2] + ": no free script number, so it can't be written."; });
+  add(/^モード(\d) ボタン(\S+): 他のボタンと同じスクリプト（No\.(\d+)）を共有しているため、書き込みませんでした。$/, function (m) { return "Mode " + m[1] + " button " + m[2] + ": shares script No." + m[3] + " with another button, so it was not written."; });
+  add(/^モード(\d) ボタン(\S+): 本体のマクロ（No\.(\d+)）を上書きします。元のマクロは全体バックアップに保存されます。$/, function (m) { return "Mode " + m[1] + " button " + m[2] + ": overwrites the device macro (No." + m[3] + "). The original macro is kept in the full backup."; });
+  add(/^モード(\d) ボタン(\S+): 本体のマクロ（No\.(\d+)）の割り当てを解除・変更します（マクロ本体は残します）。$/, function (m) { return "Mode " + m[1] + " button " + m[2] + ": unassigns or changes the device macro (No." + m[3] + ") (the macro itself is kept)."; });
+  add(/^モード(\d) ダイヤル(\d) (右回転|左回転)(?: 回転スピード)?$/, function (m) { return "Mode " + m[1] + " dial " + m[2] + " turn " + side(m[3][0]); });
+  add(/^モード(\d) ダイヤル(\d) (右回転|左回転) 回転スピード$/, function (m) { return "Mode " + m[1] + " dial " + m[2] + " turn " + side(m[3][0]) + " speed"; });
+  add(/^モード(\d) ダイヤル(\d) LED$/, function (m) { return "Mode " + m[1] + " dial " + m[2] + " LED"; });
+  add(/^モード(\d) 待機LED$/, function (m) { return "Mode " + m[1] + " idle LED"; });
+  add(/^モード(\d) ボタン(\S+)$/, function (m) { return "Mode " + m[1] + " button " + m[2]; });
+  add(/^モード\d(?: \/ SW\d+)? (モード\d.*?): (.+)$/, function (m) { return T(m[1]) + ": " + T(m[2]); });
+  add(/^(モード\d[^:]*): (.+)$/, function (m) { return T(m[1]) + ": " + T(m[2]); });
+  add(/^セクタ (\d+) の書き込み後の照合が一致しません。$/, function (m) { return "Verification after writing sector " + m[1] + " failed."; });
+  add(/^フラッシュへの保存・照合は完了しましたが、即時反映はできませんでした（(.+)）。USB を挿し直すと反映されます。$/, function (m) { return "Saving to flash and verifying are done, but the change could not be applied live (" + m[1] + "). Replug the USB cable to apply it."; });
+  add(/^本体への即時反映はできませんでした（(.+)）。USB を挿し直すと反映されます。$/, function (m) { return "The change could not be applied live (" + m[1] + "). Replug the USB cable to apply it."; });
+  add(/^全体バックアップの読み込みが不完全です（セクタ (\d+)）。書き込みません。$/, function (m) { return "The full backup read was incomplete (sector " + m[1] + "). Nothing is written."; });
+  add(/^本体が受け付けませんでした \(cmd=(0x[0-9a-f]+)\)$/, function (m) { return "The device did not accept the command (cmd=" + m[1] + ")"; });
+  add(/^本体から返事がありません \(cmd=(0x[0-9a-f]+)\)$/, function (m) { return "No reply from the device (cmd=" + m[1] + ")"; });
+  add(/^バックアップ表示中 \((.+)\)$/, function (m) { return "Showing backup (" + m[1] + ")"; });
+
+  var GLOSS = [
+    ["ダイヤル", "Dial"], ["モード", "Mode"], ["ボタン", "Button"], ["右回転", "Turn right"], ["左回転", "Turn left"], ["回転スピード", "Turn speed"],
+    ["実機", "device"], ["本体", "device"], ["書き込み", "write"], ["読み込み", "read"], ["バックアップ", "backup"], ["設定", "settings"], ["未設定", "Not set"],
+    ["変更", "changes"], ["確認", "review"], ["保存", "save"], ["閉じる", "Close"], ["キー", "Key"], ["マウス", "Mouse"], ["メディア", "Media"], ["スクリプト", "script"]
+  ];
+  GLOSS.sort(function (a, b) { return b[0].length - a[0].length; });
+
+  function punct(s) {
+    return s.replace(/（/g, " (").replace(/）/g, ")").replace(/：/g, ": ").replace(/、/g, ", ").replace(/。/g, ". ").replace(/！/g, "! ")
+      .replace(/「/g, "“").replace(/」/g, "”").replace(/　/g, " ").replace(/／/g, " / ").replace(/・/g, " · ").replace(/〜/g, "–")
+      .replace(/ +/g, " ").replace(/\( /g, "(").replace(/ \)/g, ")").replace(/[ ]+$/g, "");
+  }
+  var cache = Object.create(null);
+  function line(s) {
+    var m = /^(\s*)([\s\S]*?)(\s*)$/.exec(s);
+    var core = m[2];
+    if (!core || !JA.test(core)) return s;
+    var out = cache[core];
+    if (out === undefined) {
+      if (Object.prototype.hasOwnProperty.call(D, core)) out = D[core];
+      else {
+        for (var i = 0; i < R.length; i++) {
+          var mm = R[i][0].exec(core);
+          if (mm) { out = R[i][1](mm); break; }
+        }
+        if (out === undefined) {
+          out = core;
+          GLOSS.forEach(function (g) { out = out.split(g[0]).join(g[1] + " "); });
+        }
+      }
+      out = punct(out);
+      cache[core] = out;
+    }
+    return m[1] + out + m[3];
+  }
+  window.tr = function (s) {
+    if (typeof s !== "string" || !JA.test(s)) return s;
+    return s.indexOf("\n") >= 0 ? s.split("\n").map(line).join("\n") : line(s);
+  };
+
+  // --- messages shown in dialogs
+  var rawAlert = window.alert, rawConfirm = window.confirm, rawPrompt = window.prompt;
+  window.alert = function (s) { return rawAlert.call(window, window.tr(String(s))); };
+  window.confirm = function (s) { return rawConfirm.call(window, window.tr(String(s))); };
+  window.prompt = function (s, d) { return rawPrompt.call(window, window.tr(String(s)), d); };
+
+  // --- the page itself
+  var ATTRS = ["title", "placeholder", "aria-label", "alt"];
+  function fixNode(n) {
+    if (n.nodeType === 3) {
+      var p = n.parentNode && n.parentNode.nodeName;
+      if (p === "SCRIPT" || p === "STYLE") return;
+      var v = n.nodeValue;
+      if (/^svgTop(Normal|Push)(Left|Right)Label$/.test(n.parentNode.id || "") && /^[左右]回転$/.test(v.trim())) { var short = v.trim() === "左回転" ? "Left" : "Right"; if (v !== short) n.nodeValue = short; return; }
+      if (JA.test(v)) { var t = window.tr(v); if (t !== v) n.nodeValue = t; }
+    } else if (n.nodeType === 1) {
+      if (n.nodeName === "SCRIPT" || n.nodeName === "STYLE") return;
+      for (var i = 0; i < ATTRS.length; i++) {
+        var a = n.getAttribute(ATTRS[i]);
+        if (a && JA.test(a)) { var ta = window.tr(a); if (ta !== a) n.setAttribute(ATTRS[i], ta); }
+      }
+      for (var c = n.firstChild; c; c = c.nextSibling) fixNode(c);
+    }
+  }
+  var busy = false;
+  var observer = new MutationObserver(function (list) {
+    if (busy) return;
+    busy = true;
+    try {
+      list.forEach(function (r) {
+        if (r.type === "characterData") fixNode(r.target);
+        else if (r.type === "attributes") fixNode(r.target);
+        else r.addedNodes.forEach(fixNode);
+      });
+    } finally { busy = false; }
+  });
+  function start() {
+    fixNode(document.documentElement);
+    document.title = window.tr(document.title);
+    observer.observe(document.documentElement, { subtree: true, childList: true, characterData: true, attributes: true, attributeFilter: ATTRS });
+  }
+  if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", start); else start();
+})();
+</script>
+<script>
 // --- Constants & Tables matching FlashControl.cs / revomate_config.py ---
 const STORAGE_KEY_STATE = "revomate_studio_state_v2";
 const STORAGE_KEY_PRESETS = "revomate_studio_custom_presets_v1";
@@ -1888,6 +2236,7 @@ function onDialBarClick(isPush) {
 }
 let webhidDevice = null;
 let currentOrientation = "0";
+let rawSector0 = null;   // the device's sector 0 as read (null until the first read); "Save .bin" reads it
 function setOrientation(deg) {
   const val = (deg === "180" || deg === 180) ? "180" : "0";
   currentOrientation = val;
@@ -4328,7 +4677,7 @@ document.addEventListener("keydown", e => {
   e.preventDefault();
   top.click();                                              // a click beside the window closes it ...
   if (!top.classList.contains("hidden")) {                  // ... or, for a window that does not close that way, its own close button
-    const btn = [...top.querySelectorAll("button")].find(b => b.textContent.trim() === "閉じる");
+    const btn = [...top.querySelectorAll("button")].find(b => ["閉じる", "Close"].includes(b.textContent.trim()));
     if (btn) btn.click();
   }
 });

@@ -6,8 +6,10 @@
 
 ```sh
 PYTHONDONTWRITEBYTECODE=1 python3 -m unittest tests.test_write_safety tests.test_device_lock tests.test_request_serialization -v
-node --test tests/test_write_ui.js
+node --test tests/test_write_ui.js tests/test_i18n.js
 ```
+
+`test_i18n.js` は、画面の日本語／英語の切り替え（翻訳表）を確かめます。
 
 詳細は `../TEST_RESULTS.md` を参照してください。下記は従来のmacOS向けテストです。全件discoverにはアプリ起動を伴うテストも含まれるため、本修正作業では全件実行していません。
 

@@ -16,6 +16,7 @@ Bit Trade One の「Rev-O-mate」（ダイヤル付きの11ボタンのキーパ
 - 底面 LED の色を、パレットで選ぶ（本体にもその場で映ります）
 - 設定を `.bin` で保存・読み込みする
 - 本体の向き（ケーブル奥／手前）の表示切り替え
+- 画面の言語の切り替え（日本語／English。上の帯の言語ボックス。初期値は Mac の言語に合わせます）
 
 ## できないこと
 - **マクロ（複数の動作をつなぐ設定）の作成・編集には、対応していません。** ボタンに設定できるのは、1つの動作（キー入力、マウス操作、メディアキー）です。
@@ -53,6 +54,6 @@ Bit Trade One の「Rev-O-mate」（ダイヤル付きの11ボタンのキーパ
 
 ## English (short)
 **DialMatrix** is an **unofficial** Mac tool for configuring Bit Trade One's *Rev-O-mate* dial keypad: read the device's settings, edit buttons / dial actions / LED colour, and write them back (with an automatic full backup first).
-Macros (several chained actions) cannot be created or edited; a button that holds one is shown as "device macro" and is overwritten if you set it again. Built with the help of AI assistants (Claude and Gemini); the author checks it on a real device and decides what is released. Not affiliated with Bit Trade One. "Rev-O-mate" is a trademark of Bit Trade One. Use at your own risk.
+The screen can be switched between Japanese and English (language box in the top bar; it follows the Mac's language by default). Macros (several chained actions) cannot be created or edited; a button that holds one is shown as "device macro" and is overwritten if you set it again. Built with the help of AI assistants (Claude and Gemini); the author checks it on a real device and decides what is released. Not affiliated with Bit Trade One. "Rev-O-mate" is a trademark of Bit Trade One. Use at your own risk.
 The device protocol was learned from Bit Trade One's public source ([BFROM11BK_Rev-O-mate](https://github.com/bit-trade-one/BFROM11BK_Rev-O-mate), Assembly Desk License, MIT-based); no binary was reverse-engineered.
 The app is not signed or notarized yet: on first launch, right-click → Open. Code: MIT (see `LICENSE`); third-party notices: `THIRD_PARTY_NOTICES.md`.
