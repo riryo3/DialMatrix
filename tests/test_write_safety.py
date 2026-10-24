@@ -250,5 +250,66 @@ class WriteSafetyTests(unittest.TestCase):
         self.assertEqual(out["applied_buttons"][0]["status"], "already_current")
         self.assertEqual(self.writes, [])
 
+    # --- a write that stops partway (device vanishes, I/O error): what the caller is told ---
+    def fail_on(self, bad_sector, error):
+        def write(dev, sector, data):
+            if sector == bad_sector:
+                raise error
+            self.write_sector(dev, sector, data)
+        self.write_mock.side_effect = write
+
+    def failed_write(self, cfg, bad_sector, error=OSError("device disconnected")):
+        plan = self.dry_plan(cfg); self.fail_on(bad_sector, error)
+        with self.assertRaises(app.WriteFailure) as caught:
+            app.write_config(self.dev, cfg, plan_token=plan["plan_token"])
+        return caught.exception.result
+
+    def script_config(self):
+        return self.button_config([{"scriptDirty": True, "role": "key", "key": 0x70}])
+
+    def test_failure_on_first_data_sector_reports_nothing_completed(self):
+        result = self.failed_write(self.script_config(), 2)
+        self.assertEqual(result["completed_sectors"], [])
+        self.assertEqual(result["failed_sector"], 2)
+        self.assertEqual(self.writes, [])
+
+    def test_failure_on_sector_zero_reports_data_and_table_completed(self):
+        result = self.failed_write(self.script_config(), 0)
+        self.assertEqual(result["completed_sectors"], [2, 1])
+        self.assertEqual(result["failed_sector"], 0)
+        self.assertEqual(self.writes, [2, 1])
+        self.assertEqual(result["applied_buttons"], [])
+
+    def test_failure_stops_all_later_sectors(self):
+        self.failed_write(self.script_config(), 1)
+        self.assertNotIn(0, self.writes)
+
+    def test_failure_message_and_recovery_flag_are_reported(self):
+        result = self.failed_write(self.script_config(), 1, OSError("device disconnected"))
+        self.assertFalse(result["ok"])
+        self.assertIn("device disconnected", result["error"])
+        self.assertTrue(result["recovery_required"])
+        self.assertEqual(result["changes"], [])
+
+    def test_backup_named_in_failure_is_the_untouched_original_flash(self):
+        original = bytes(self.flash)
+        result = self.failed_write(self.script_config(), 0)
+        self.assertEqual(len(result["backups"]), 1)
+        found = [os.path.join(d, n) for d, _, ns in os.walk(self.tmp.name) for n in ns if n == result["backups"][0]]
+        self.assertEqual(len(found), 1)
+        with open(found[0], "rb") as f:
+            self.assertEqual(f.read(), original)
+
+    def test_restoring_from_the_reported_backup_recovers_the_flash(self):
+        original = bytes(self.flash)
+        result = self.failed_write(self.script_config(), 0)
+        self.assertNotEqual(bytes(self.flash), original)   # sectors 2 and 1 were already changed
+        found = [os.path.join(d, n) for d, _, ns in os.walk(self.tmp.name) for n in ns if n == result["backups"][0]]
+        with open(found[0], "rb") as f:
+            backup = f.read()
+        for sector in range(32):
+            self.write_sector(self.dev, sector, backup[sector * app.SECTOR_SIZE:(sector + 1) * app.SECTOR_SIZE])
+        self.assertEqual(bytes(self.flash), original)
+
 if __name__ == "__main__":
     unittest.main()
