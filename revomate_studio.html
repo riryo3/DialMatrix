@@ -1836,7 +1836,7 @@
     "HSL（色合い・鮮やかさ・明るさ）": "HSL (hue / saturation / lightness)", "RGB（赤・緑・青）": "RGB (red / green / blue)", "カラーコード（#ff8000）": "Colour code (#ff8000)",
     "押して色を選ぶ": "Click to pick a colour", "11 を押している間に使うダイヤル": "Dial used while 11 is held down",
     // --- button section
-    "ボタン": "Buttons", "左の本体プレビューから設定したいボタン（1〜11）を選択してください。": "Select a button (1–11) in the device preview on the left.",
+    "ボタン": "Button", "左の本体プレビューから設定したいボタン（1〜11）を選択してください。": "Select a button (1–11) in the device preview on the left.",
     "11 の設定（ダイヤルの押し込み）": "Button 11 settings (dial push)", "本体機能切替の種類": "Device function",
     "モードを順番に切替": "Cycle through modes", "モード 1 へ直行": "Go to mode 1", "モード 2 へ直行": "Go to mode 2", "モード 3 へ直行": "Go to mode 3",
     "ダイヤル 1 に切替": "Switch to dial 1", "ダイヤル 2 に切替": "Switch to dial 2", "ダイヤル 3 に切替": "Switch to dial 3", "ダイヤル 4 に切替": "Switch to dial 4",
@@ -2085,10 +2085,12 @@
   var ATTRS = ["title", "placeholder", "aria-label", "alt"];
   function fixNode(n) {
     if (n.nodeType === 3) {
-      var p = n.parentNode && n.parentNode.nodeName;
+      var par = n.parentNode;
+      if (!par) return;                       // a text node that has already been removed
+      var p = par.nodeName;
       if (p === "SCRIPT" || p === "STYLE") return;
       var v = n.nodeValue;
-      if (/^svgTop(Normal|Push)(Left|Right)Label$/.test(n.parentNode.id || "") && /^[左右]回転$/.test(v.trim())) { var short = v.trim() === "左回転" ? "Left" : "Right"; if (v !== short) n.nodeValue = short; return; }
+      if (/^svgTop(Normal|Push)(Left|Right)Label$/.test(par.id || "") && /^[左右]回転$/.test(v.trim())) { var short = v.trim() === "左回転" ? "Left" : "Right"; if (v !== short) n.nodeValue = short; return; }
       if (JA.test(v)) { var t = window.tr(v); if (t !== v) n.nodeValue = t; }
     } else if (n.nodeType === 1) {
       if (n.nodeName === "SCRIPT" || n.nodeName === "STYLE") return;
@@ -2105,9 +2107,11 @@
     busy = true;
     try {
       list.forEach(function (r) {
-        if (r.type === "characterData") fixNode(r.target);
-        else if (r.type === "attributes") fixNode(r.target);
-        else r.addedNodes.forEach(fixNode);
+        try {                                  // one odd node must never stop the translation of the rest
+          if (r.type === "characterData") fixNode(r.target);
+          else if (r.type === "attributes") fixNode(r.target);
+          else r.addedNodes.forEach(fixNode);
+        } catch (_) {}
       });
     } finally { busy = false; }
   });
