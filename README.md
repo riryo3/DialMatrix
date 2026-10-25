@@ -40,6 +40,8 @@ Bit Trade One の「Rev-O-mate」（ダイヤル付きの11ボタンのキーパ
 Windows 版で確認したのは、**1台の PC と1つの本体**での、実機の読み込み、LED の表示、全体バックアップ付きの書き込み、`.bin` からの復元、書き込んだ設定が抜き差しのあとも残ること、Python のない環境（Windows サンドボックス）での起動です。Windows 10、複数セクタの書き込み、完了音（スピーカーのない環境で試しました）は、未確認です。
 ソースから動かすときは、Python 3 に `pip install hidapi pywebview` を入れて、`python revomate_app.py --window` を実行します。`.exe` を作るには、`build_app/build_win.ps1` を使います（`pip install pyinstaller pillow` も必要です）。
 
+**Linux は未対応です。** 本体を持っている Linux ユーザーがいれば、[Issue](https://github.com/riryo3/DialMatrix/issues) で教えてください。要望があれば、検討します。
+
 ## 使う前に（必ず読んでください）
 - **自己責任でお使いください。** 本体への書き込みを誤ると、設定が壊れることがあります。作者は、その損害に責任を負いません。
 - 書き込む前に、アプリが本体全体（2 MiB）のバックアップを `~/Documents/DialMatrix バックアップ/`（Windows では「ドキュメント」フォルダの `DialMatrix バックアップ`）に保存し、読み戻し照合します（ソース実行時はプロジェクトフォルダ）。保存・照合に失敗した場合は消去・書き込みを始めません。**書き込む前のバックアップが、元に戻す手段です。消さないでください。**
@@ -68,3 +70,4 @@ The screen can be switched between Japanese and English (language box in the top
 The device protocol was learned from Bit Trade One's public source ([BFROM11BK_Rev-O-mate](https://github.com/bit-trade-one/BFROM11BK_Rev-O-mate), Assembly Desk License, MIT-based); no binary was reverse-engineered.
 The app is not signed or notarized yet: on first launch, right-click → Open.
 **Windows:** download `DialMatrix-Windows.zip` from Releases, unzip it, and run `DialMatrix\DialMatrix.exe` (keep the whole folder together; on first launch SmartScreen may warn because the app is unsigned: "More info" → "Run anyway"). It needs no Python; the WebView2 runtime (built into Windows 11) shows the window. Verified on Windows 11 with one PC and one device only (read, LED preview, backup + write, restore from `.bin`, start without Python); Windows 10 is untested. Code: MIT (see `LICENSE`); third-party notices: `THIRD_PARTY_NOTICES.md`.
+**Linux:** not supported yet. If you use a Rev-O-mate on Linux, please let me know in an [Issue](https://github.com/riryo3/DialMatrix/issues).
