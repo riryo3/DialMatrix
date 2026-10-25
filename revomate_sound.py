@@ -4,9 +4,13 @@ Shared code of both editions, but each edition keeps its own choice (they are se
 import json
 import os
 import subprocess
+import sys
 
-SOUND_DIR = "/System/Library/Sounds"
-DEFAULTS = {"enabled": True, "asked": False, "ok": "Glass", "fail": "Basso"}
+WIN = sys.platform == "win32"
+SOUND_DIR = os.path.join(os.environ.get("SystemRoot", r"C:\Windows"), "Media") if WIN else "/System/Library/Sounds"
+SOUND_EXT = ".wav" if WIN else ".aiff"
+DEFAULTS = {"enabled": True, "asked": False, "ok": "Windows Notify System Generic", "fail": "Windows Critical Stop"} if WIN \
+    else {"enabled": True, "asked": False, "ok": "Glass", "fail": "Basso"}
 
 
 def prefs_path(edition="lite"):
@@ -14,12 +18,14 @@ def prefs_path(edition="lite"):
     base = os.environ.get("REVOMATE_SOUND_PREFS")                # tests: a folder of their own, never the person's real files
     if base:
         return os.path.join(base, f"done_sound_{edition}.json")
+    if WIN:
+        return os.path.join(os.environ.get("APPDATA") or os.path.expanduser("~"), "DialMatrix", f"done_sound_{edition}.json")
     return os.path.join(os.path.expanduser("~"), "Library", "Application Support", "DialMatrix", f"done_sound_{edition}.json")
 
 
 def sounds():
     try:
-        return sorted(os.path.splitext(n)[0] for n in os.listdir(SOUND_DIR) if n.endswith(".aiff"))
+        return sorted(os.path.splitext(n)[0] for n in os.listdir(SOUND_DIR) if n.endswith(SOUND_EXT))
     except OSError:
         return []
 
@@ -62,7 +68,11 @@ def play(name):
     if name not in sounds():
         return False
     try:
-        subprocess.Popen(["afplay", os.path.join(SOUND_DIR, name + ".aiff")], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        if WIN:
+            import winsound
+            winsound.PlaySound(os.path.join(SOUND_DIR, name + SOUND_EXT), winsound.SND_FILENAME | winsound.SND_ASYNC)
+            return True
+        subprocess.Popen(["afplay", os.path.join(SOUND_DIR, name + SOUND_EXT)], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
         return True
     except OSError:
         return False

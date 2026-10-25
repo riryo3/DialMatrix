@@ -19,6 +19,10 @@ c = S / 2
 for a in (-90,):                      # ダイヤルの印
     x, y = c + 150 * math.cos(math.radians(a)), c + 150 * math.sin(math.radians(a))
     d.ellipse((x - 26, y - 26, x + 26, y + 26), fill=RING)
+if sys.platform == "win32":           # Windows: AppIcon.ico (同じ絵を複数サイズで1ファイルに)
+    img.save(OUT + ".ico", sizes=[(s, s) for s in (16, 24, 32, 48, 64, 128, 256)])
+    print(OUT + ".ico")
+    sys.exit(0)
 ICONSET = OUT + ".iconset"
 os.makedirs(ICONSET, exist_ok=True)
 for sz in (16, 32, 128, 256, 512):

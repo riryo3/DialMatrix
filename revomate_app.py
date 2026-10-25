@@ -135,6 +135,16 @@ if getattr(sys, "frozen", False):
     HERE = getattr(sys, "_MEIPASS", HERE)
     # an existing folder from the earlier name (Rev-O-mate Studio) is kept in use: nothing is moved or renamed
     _docs = os.path.join(os.path.expanduser("~"), "Documents")
+    if sys.platform == "win32":
+        # the real Documents folder (it can live inside OneDrive, not under the home folder)
+        try:
+            import ctypes
+            from ctypes import wintypes
+            _buf = ctypes.create_unicode_buffer(wintypes.MAX_PATH)
+            if ctypes.windll.shell32.SHGetFolderPathW(None, 5, None, 0, _buf) == 0 and _buf.value:     # 5 = CSIDL_PERSONAL
+                _docs = _buf.value
+        except Exception:
+            pass
     DATA_DIR = os.path.join(_docs, "DialMatrix バックアップ")
     if not os.path.isdir(DATA_DIR) and os.path.isdir(os.path.join(_docs, "Rev-O-mate Studio バックアップ")):
         DATA_DIR = os.path.join(_docs, "Rev-O-mate Studio バックアップ")
@@ -761,7 +771,10 @@ class StudioHandler(http.server.SimpleHTTPRequestHandler):
             with open(path, "wb") as f:
                 f.write(data)
             try:
-                subprocess.Popen(["open", "-R", path])      # show it in Finder
+                if sys.platform == "win32":
+                    subprocess.Popen(["explorer", "/select,", os.path.normpath(path)])      # show it in Explorer
+                else:
+                    subprocess.Popen(["open", "-R", path])      # show it in Finder
             except Exception:
                 pass
             return self._send_json({"ok": True, "path": path})
@@ -1035,11 +1048,12 @@ def _persist_full_backup(data, label):
         if len(saved) != len(data) or saved != data:
             raise IOError("全体バックアップの保存後の照合が一致しません。書き込みません。")
         os.replace(temporary, path)
-        directory_fd = os.open(DATA_DIR, os.O_RDONLY)
-        try:
-            os.fsync(directory_fd)
-        finally:
-            os.close(directory_fd)
+        if sys.platform != "win32":       # a folder cannot be opened like a file on Windows (the file itself was already fsynced above)
+            directory_fd = os.open(DATA_DIR, os.O_RDONLY)
+            try:
+                os.fsync(directory_fd)
+            finally:
+                os.close(directory_fd)
         with open(path, "rb") as f:
             if f.read() != data:
                 raise IOError("確定した全体バックアップの照合が一致しません。")
@@ -1059,7 +1073,10 @@ def save_full_backup(dev, label):
 
 ASK_SAVE_PATH = None   # set in window mode: shows the system "save as" panel and returns the chosen path (None = cancelled)
 # small settings of the app itself, in a folder named after the bundle id (so an uninstaller such as AppCleaner finds it)
-APP_SUPPORT_DIR = os.path.join(os.path.expanduser("~"), "Library", "Application Support", "com.dialmatrix.lite")
+if sys.platform == "win32":
+    APP_SUPPORT_DIR = os.path.join(os.environ.get("APPDATA") or os.path.expanduser("~"), "com.dialmatrix.lite")
+else:
+    APP_SUPPORT_DIR = os.path.join(os.path.expanduser("~"), "Library", "Application Support", "com.dialmatrix.lite")
 LAST_DIR_PATH = os.path.join(APP_SUPPORT_DIR, "last_save_dir.txt")
 PING = {"last": 0.0}
 IDLE_QUIT_SECONDS = 180        # packaged app: quit when the page has been closed this long

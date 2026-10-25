@@ -50,6 +50,7 @@ class SoundModule(unittest.TestCase):
         self.assertTrue(rsnd.load("lite")["asked"])
         self.assertFalse(rsnd.load("pro")["asked"])       # the other app asks for itself
 
+    @unittest.skipIf(sys.platform == "win32", "checks the macOS player (afplay); Windows plays through winsound")
     def test_only_a_system_sound_is_played(self):
         with mock.patch.object(rsnd.subprocess, "Popen") as popen:
             self.assertFalse(rsnd.play("../../bin/ls"))

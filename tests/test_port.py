@@ -8,7 +8,7 @@ SCRIPT = 'import sys, os, socket, threading, time, urllib.request\nsys.path.inse
 class PortTaken(unittest.TestCase):
     def test_a_free_port_is_used_when_the_preferred_one_is_taken(self):
         with tempfile.NamedTemporaryFile("w", suffix=".py", delete=False) as f:
-            f.write(SCRIPT.replace("__ROOT__", ROOT))
+            f.write(SCRIPT.replace("__ROOT__", ROOT.replace("\\", "/")))      # backslashes of a Windows path would be read as escapes
             path = f.name
         try:
             out = subprocess.run([sys.executable, "-I", path], capture_output=True, text=True, timeout=60,
